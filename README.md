@@ -1,37 +1,56 @@
-# PhysioTracker v3 — Multi-Person Edition
+PhysioTracker v3 - Multi-Person Edition
+AI-powered contactless human motion analysis for physiotherapy and sports medicine.
 
-AI-Powered Contactless Human Motion Analysis · Physiotherapy & Sports Medicine
+Project Overview
+PhysioTracker is a real-time monitoring platform that combines phone IMU signals, BLE RSSI estimates, and room-level wireless sensing to understand movement activity, fall risk, and approximate location of people in a room.
 
----
+It is designed for:
 
-## What's New in This Version
+Physiotherapy progress monitoring
+Rehab session observation
+Sports movement tracking
+Safety-oriented fall-risk alerts in shared spaces
+Core capabilities:
 
-### Multi-Person Tracking (Fixed)
-- Each phone that opens `/phone` and sends data is tracked as a **separate person**
-- Each phone gets a stable unique Device ID stored in its browser (localStorage)
-- You can also type a custom name like `phone_alice` or `phone_bob`
-- Up to 10 simultaneous phones supported
-- The dashboard shows **per-person activity, fall risk, cadence, and room position**
+Multi-person live tracking
+Per-person activity classification
+Fall-risk detection with temporal confirmation
+Real-time dashboard and websocket stream
+API-first backend for mobile and web integration
+Why the /phone route is important
+The /phone page is the entry point that turns each mobile device into an active sensing node for one person.
 
-### False Fall Detection Fixed
-- Old behaviour: a single noisy IMU sample could trigger "FALL RISK"
-- New behaviour: fall detection requires **3 consecutive qualifying frames** (hysteresis)
-  - Both `jerk > 0.55` AND `accel_rms > 1.6` must be true for ~0.3 s before alerting
-  - Counter decays when readings return to normal — no sticky false alarms
+Why this matters:
 
-### Simulated Bluetooth for Position Estimation
-- The phone page now simulates **5 BLE beacon RSSI values** (room corners + centre)
-- These are sent alongside IMU data to the backend
-- Backend uses a **log-distance RSSI model + weighted centroid trilateration** to estimate each person's position in the room
-- The radar/room canvas now shows each person at their estimated position with their device name and activity label
+Device identity: each phone gets a stable device_id, so the backend can keep person data separated
+Person mapping: in multi-person scenarios, one phone corresponds to one tracked person slot
+Sensor stream source: IMU samples and BLE scan values are sent from this route to /api/imu
+Real + simulated testing: it supports both live motion data and simulation mode for demos or development
+Data quality: reliable, continuous input from /phone is what enables stable activity labels, cadence, and fall-risk logic
+Without /phone, the system cannot provide robust per-person tracking; it would only have room-level inference signals, which are less precise for individual monitoring.
 
-### Dashboard Improvements
-- **Persons card**: shows a mini-card per connected phone with activity, fall risk, accel, jerk, cadence
-- **Phone Streams card**: lists all live devices with current activity and fall risk
-- **Room canvas**: each person has their own colour, name label, and activity label; fall risk triggers a red `⚠ FALL` annotation
-- **Radar canvas**: colour-coded dots per person, activity label under each dot, red ring for fall risk
-
----
+What is improved in v3
+Multi-person tracking (fixed)
+Each phone that opens /phone and sends data is tracked as a separate person
+Each phone gets a stable unique device ID stored in browser local storage
+You can also type a custom name like phone_alice or phone_bob
+Up to 10 simultaneous phones are supported
+Dashboard shows per-person activity, fall risk, cadence, and room position
+False fall detection reduced
+Previous behavior: a single noisy IMU sample could trigger a fall alert
+Current behavior: fall detection requires 3 consecutive qualifying frames (hysteresis)
+Both jerk > 0.55 and accel_rms > 1.6 must stay true for about 0.3 seconds before alerting
+Counter decays when readings normalize to avoid sticky false alarms
+BLE-based position estimation added
+The /phone page can simulate 5 BLE beacon RSSI values (room corners plus center)
+BLE values are transmitted with IMU data to backend
+Backend applies log-distance RSSI modeling and weighted centroid trilateration
+Radar and room canvas show each person with estimated position, name, and activity label
+Dashboard upgrades
+Persons card: mini-card for each connected phone with activity, fall risk, accel, jerk, cadence
+Phone streams card: all live devices with current activity and fall risk
+Room canvas: unique color and labels per person, with clear fall warning marker
+Radar canvas: per-person dots, activity labels, and fall-risk highlighting
 
 ## Quick Start
 
