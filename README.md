@@ -185,11 +185,3 @@ BLE sim (5 beacons, per phone) --> trilaterate --> PersonState.pos_x/y
 ```
 
 ---
-
-## Limitations and Next Steps
-
-- Person count is currently phone-driven; missing phones can only be flagged as inferred ?, not precisely counted
-- WiFi provides corroborating room-motion only in phase 1
-- CSI-based multi-person counting is planned as a phase 2 upgrade
-- BLE trilateration quality depends on browser BLE support and beacon visibility
-- Activity classifier is rule-based; train a CNN-LSTM model on collected ground-truth data for better accuracy
