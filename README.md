@@ -5,8 +5,8 @@ AI-powered contactless human motion analysis for physiotherapy and sports medici
 ---
 
 #TRY IT OUT:
-Open in laptop: https://medathon2k26.onrender.com/
-Open in Phone: https://medathon2k26.onrender.com/phone
+-Open in laptop: https://medathon2k26.onrender.com/
+-Open in Phone: https://medathon2k26.onrender.com/phone
 
 ## Project Overview
 
