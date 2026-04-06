@@ -4,6 +4,10 @@ AI-powered contactless human motion analysis for physiotherapy and sports medici
 
 ---
 
+#TRY IT OUT:
+Open in laptop: https://medathon2k26.onrender.com/
+Open in Phone: https://medathon2k26.onrender.com/phone
+
 ## Project Overview
 
 PhysioTracker is a real-time monitoring platform that combines phone IMU signals, BLE RSSI estimates, and room-level wireless sensing to understand movement activity, fall risk, and approximate location of people in a room.
