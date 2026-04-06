@@ -1,0 +1,949 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>PhysioTracker - Phone Sensor</title>
+<style>
+:root{--bg:#060810;--bg2:#0c1018;--border:#1a2235;--cyan:#00e5ff;--green:#00ff9d;--red:#ff3d5a;--amber:#ffb627;--purple:#b57aff;--text:#e2e8f8;--muted:#8496b4;--dim:#3d4f6e;--mono:'Courier New',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px 16px;text-align:center;user-select:none;-webkit-tap-highlight-color:transparent}
+.logo{font-size:11px;letter-spacing:.2em;color:var(--dim);margin-bottom:4px}
+h1{font-size:24px;font-weight:700;color:var(--cyan);letter-spacing:-.02em;margin-bottom:2px}
+.sub{font-size:11px;color:var(--muted);margin-bottom:16px}
+.status{font-size:12px;margin-bottom:12px;padding:10px 16px;border-radius:8px;border:1px solid;transition:all .3s;line-height:1.5;width:100%;max-width:340px}
+.status.ok{border-color:var(--green);color:var(--green);background:rgba(0,255,157,.06)}
+.status.warn{border-color:var(--amber);color:var(--amber);background:rgba(255,182,39,.06)}
+.status.err{border-color:var(--red);color:var(--red);background:rgba(255,61,90,.06)}
+.env-note,.note{font-size:10px;line-height:1.6;border-radius:6px;padding:10px 12px;max-width:340px;text-align:left;margin-bottom:10px}
+.env-note{color:var(--muted);background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.18)}
+.note{color:var(--amber);background:rgba(255,182,39,.08);border:1px solid rgba(255,182,39,.2)}
+.section-lbl{font-size:9px;letter-spacing:.15em;color:var(--dim);text-transform:uppercase;margin:10px 0 8px;width:100%;max-width:340px;text-align:left}
+.input{width:100%;max-width:340px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none}
+.input:focus{border-color:var(--cyan)}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:340px;margin-bottom:10px}
+.metric{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.mlabel{font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px}
+.mval{font-size:22px;font-weight:700;color:var(--cyan);line-height:1}
+.munit{font-size:10px;color:var(--muted)}
+.server-box{width:100%;max-width:340px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--muted);text-align:left;line-height:1.6;margin-bottom:10px}
+.btn{border:none;border-radius:10px;padding:14px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.05em;text-transform:uppercase;width:100%;max-width:340px;margin-bottom:8px;transition:all .2s}
+.btn-primary{background:var(--cyan);color:#060810}
+.btn-primary.active{background:var(--red);color:#fff}
+.btn-secondary{background:var(--bg2);border:1px solid var(--border);color:var(--muted)}
+.sim-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;max-width:340px;margin-bottom:8px}
+.btn-sim{background:var(--bg2);border:1px solid var(--border);color:var(--muted);padding:10px 4px;font-size:10px;border-radius:6px}
+.btn-sim.active{border-color:var(--purple);color:var(--purple);background:rgba(181,122,255,.1)}
+.ble-grid{width:100%;max-width:340px;display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;font-size:10px}
+.divider{width:100%;max-width:340px;border:none;border-top:1px solid var(--border);margin:10px 0}
+.log{font-size:9px;color:var(--dim);max-width:340px;line-height:1.7;margin-top:8px;text-align:left;word-break:break-all}
+#cdot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--dim);margin-right:5px;vertical-align:middle}
+#cdot.live{background:var(--green);animation:p 1.5s infinite}
+@keyframes p{0%,100%{opacity:1}50%{opacity:.35}}
+</style>
+</head>
+<body>
+<div class="logo">PHYSIOTRACKER</div>
+<div style="font-size:26px;margin-bottom:6px">Phone</div>
+<h1>PHONE IMU</h1>
+<div class="sub">Stream sensor data to the dashboard</div>
+
+<div class="status warn" id="status">Tap START to enable sensors</div>
+<div id="https-note" class="note" style="display:none">Mobile browsers often require HTTPS for motion sensors. If real sensors fail, use Sim Stream below.</div>
+<div class="env-note" id="env-note">Checking device capabilities...</div>
+
+<div class="section-lbl">Device Identity</div>
+<input id="device-id-input" class="input" type="text" placeholder="Device ID (example: phone_alice)"/>
+<div style="font-size:10px;color:var(--muted);margin:4px 0 10px;max-width:340px;text-align:left">Each unique device ID maps to one tracked person.</div>
+
+<div class="metrics">
+  <div class="metric"><div class="mlabel">Accel RMS</div><div class="mval" id="v-accel">--</div><div class="munit">m/s2</div></div>
+  <div class="metric"><div class="mlabel">Gyro RMS</div><div class="mval" id="v-gyro">--</div><div class="munit">rad/s</div></div>
+  <div class="metric"><div class="mlabel">Send Rate</div><div class="mval" id="v-fps">--</div><div class="munit">/sec</div></div>
+  <div class="metric"><div class="mlabel">Samples</div><div class="mval" id="v-total">0</div></div>
+</div>
+
+<div id="server-feedback" class="server-box">
+  <span id="sf-activity">Activity: --</span><br>
+  <span id="sf-fall">Fall Risk: --</span><br>
+  <span id="sf-persons">Persons in room: --</span><br>
+  <span id="sf-room">Room match: --</span>
+</div>
+
+<button class="btn btn-secondary" id="gps-btn" onclick="setRoomReference()">Set Current Location As Room</button>
+<div style="font-size:10px;color:var(--muted);margin:0 0 8px;max-width:340px;text-align:left" id="gps-note">GPS room reference not set.</div>
+
+<div class="section-lbl">Empty Room Baseline</div>
+<input id="room-name-input" class="input" type="text" placeholder="Room name (example: Lab A)" style="margin-bottom:8px"/>
+<div style="display:flex;gap:6px;width:100%;max-width:340px;margin-bottom:8px">
+  <select id="room-select" class="input" style="flex:1;padding:10px 8px">
+    <option value="">Saved rooms...</option>
+  </select>
+  <button class="btn btn-secondary" style="max-width:120px;margin:0;padding:10px" onclick="loadSelectedRoomBaseline()">Load</button>
+</div>
+<button class="btn btn-secondary" id="baseline-delay-btn" onclick="captureEmptyBaseline(8)">Capture Empty Baseline (8s Delay)</button>
+<button class="btn btn-secondary" id="baseline-now-btn" onclick="captureEmptyBaseline(0)">Capture Empty Baseline Now</button>
+<div style="display:flex;gap:6px;width:100%;max-width:340px;margin-bottom:8px">
+  <button class="btn btn-secondary" style="margin:0;padding:10px;flex:1" onclick="captureOccupancyBaseline(1)">Capture 1 Person Baseline</button>
+  <button class="btn btn-secondary" style="margin:0;padding:10px;flex:1" onclick="captureOccupancyBaseline(2)">Capture 2 Person Baseline</button>
+</div>
+<button class="btn btn-secondary" id="baseline-clear-btn" onclick="clearEmptyBaseline()">Clear Baseline</button>
+<button class="btn btn-secondary" id="baseline-delete-room-btn" onclick="deleteSelectedRoomBaseline()">Delete Selected Saved Room</button>
+<div style="font-size:10px;color:var(--muted);margin:0 0 8px;max-width:340px;text-align:left" id="baseline-note">Baseline not set.</div>
+
+<button class="btn btn-primary" id="start-btn" onclick="toggleCapture()">Start Real Sensor</button>
+
+<hr class="divider"/>
+<div class="section-lbl">Simulate Activity</div>
+<div class="sim-grid">
+  <button class="btn-sim active" id="ms-idle" onclick="setSimMode('idle')">IDLE</button>
+  <button class="btn-sim" id="ms-walk" onclick="setSimMode('walk')">WALK</button>
+  <button class="btn-sim" id="ms-squat" onclick="setSimMode('squat')">SQUAT</button>
+  <button class="btn-sim" id="ms-bend" onclick="setSimMode('bend')">BEND</button>
+  <button class="btn-sim" id="ms-lift" onclick="setSimMode('lift')">LIFT</button>
+  <button class="btn-sim" id="ms-fall" onclick="setSimMode('fall_risk')">FALL</button>
+</div>
+<button class="btn btn-secondary" id="sim-btn" onclick="toggleSim()">Start Sim Stream</button>
+
+<hr class="divider"/>
+<div class="section-lbl">Ground Truth Collection</div>
+<div class="sim-grid">
+  <button class="btn-sim" id="gc-idle" onclick="setCollectLabel('idle')">IDLE</button>
+  <button class="btn-sim active" id="gc-walk" onclick="setCollectLabel('walk')">WALK</button>
+  <button class="btn-sim" id="gc-squat" onclick="setCollectLabel('squat')">SQUAT</button>
+  <button class="btn-sim" id="gc-bend" onclick="setCollectLabel('bend')">BEND</button>
+  <button class="btn-sim" id="gc-lift" onclick="setCollectLabel('lift')">LIFT</button>
+  <button class="btn-sim" id="gc-fall" onclick="setCollectLabel('fall_risk')">FALL</button>
+</div>
+<button class="btn btn-secondary" id="collect-btn" onclick="toggleCollection()">Start Label Collection</button>
+<div style="font-size:10px;color:var(--muted);margin:0 0 8px;max-width:340px;text-align:left" id="collect-note">Label: WALK · Collected windows: 0</div>
+
+<hr class="divider"/>
+<div class="section-lbl">Simulated BLE Beacons</div>
+<div id="ble-grid" class="ble-grid"></div>
+<button class="btn btn-secondary" id="ble-btn" onclick="toggleRealBLE()">Enable Real BLE Scan</button>
+
+<div class="log"><span id="cdot"></span><span id="log-txt">Waiting to start...</span></div>
+
+<script>
+function normalizeBaseUrl(v){ return (v || '').replace(/\/$/, ''); }
+const params = new URLSearchParams(location.search);
+const apiOverride = params.get('api');
+const API = normalizeBaseUrl(apiOverride || (location.protocol === 'file:' ? 'http://localhost:8000' : location.origin));
+
+function defaultDeviceId(){
+  let id = localStorage.getItem('pt_device_id');
+  if(!id){
+    id = 'phone_' + Math.random().toString(36).slice(2, 7);
+    localStorage.setItem('pt_device_id', id);
+  }
+  return id;
+}
+
+let deviceId = defaultDeviceId();
+const deviceInput = document.getElementById('device-id-input');
+deviceInput.value = deviceId;
+deviceInput.addEventListener('input', ()=>{
+  deviceId = (deviceInput.value || '').trim() || defaultDeviceId();
+  updateEnvNote();
+});
+
+const BLE_BEACONS = [
+  {mac:'AA:BB:CC:DD:EE:01', name:'Beacon NW', base:-55},
+  {mac:'AA:BB:CC:DD:EE:02', name:'Beacon NE', base:-62},
+  {mac:'AA:BB:CC:DD:EE:03', name:'Beacon SE', base:-70},
+  {mac:'AA:BB:CC:DD:EE:04', name:'Beacon SW', base:-48},
+  {mac:'AA:BB:CC:DD:EE:05', name:'Beacon C',  base:-75}
+];
+let blePhase = 0;
+
+let capturing = false;
+let simming = false;
+let buf = [];
+let total = 0;
+let fpsCount = 0;
+let lastFpsT = Date.now();
+let capInterval = null;
+let simInterval = null;
+let simPhase = 0;
+let simMode = 'idle';
+let sawMotionEvent = false;
+let bleRealEnabled = false;
+let bleScanHandle = null;
+let bleListener = null;
+const bleRealMap = {};
+let bleManualMode = false;
+const bleManualMap = {};
+let gpsState = { roomMatch: null, accuracyM: null, lat: null, lon: null, ts: 0 };
+const ROOM_REFS_KEY = 'pt_room_refs';
+let roomRef = null;
+let roomRefs = {};
+let collecting = false;
+let collectLabel = 'walk';
+let collectWindow = [];
+let collectWindowsSent = 0;
+let baselineCountdownTimer = null;
+const ROOM_NAME_KEY = 'pt_room_name';
+let autoLoadedRoom = '';
+let lastAutoLoadTs = 0;
+
+const roomNameInput = document.getElementById('room-name-input');
+roomNameInput.value = localStorage.getItem(ROOM_NAME_KEY) || '';
+roomNameInput.addEventListener('input', ()=>{
+  localStorage.setItem(ROOM_NAME_KEY, (roomNameInput.value || '').trim());
+  loadRoomRef();
+});
+
+if(/iPhone|iPad|Android/i.test(navigator.userAgent) && location.protocol === 'http:'){
+  document.getElementById('https-note').style.display = 'block';
+}
+
+function setStatus(msg, cls){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status ' + cls;
+}
+function setLog(msg){ document.getElementById('log-txt').textContent = msg; }
+function setDot(on){ document.getElementById('cdot').className = on ? 'live' : ''; }
+
+function updateEnvNote(){
+  const lines = [];
+  lines.push('Network: ' + (navigator.onLine ? 'online' : 'offline'));
+  lines.push('Secure context: ' + (window.isSecureContext ? 'yes' : 'no'));
+  lines.push('DeviceMotion: ' + (typeof DeviceMotionEvent !== 'undefined' ? 'available' : 'not available'));
+  lines.push('WebBluetooth: ' + (navigator.bluetooth ? 'available' : 'not available'));
+  lines.push('LE passive scan API: ' + (navigator.bluetooth && typeof navigator.bluetooth.requestLEScan === 'function' ? 'available' : 'not available'));
+  lines.push('Geolocation: ' + (navigator.geolocation ? 'available' : 'not available'));
+  lines.push('Backend: ' + API);
+  lines.push('This device ID: ' + deviceId);
+  document.getElementById('env-note').innerHTML = lines.join('<br>');
+}
+window.addEventListener('online', updateEnvNote);
+window.addEventListener('offline', updateEnvNote);
+updateEnvNote();
+
+function haversineMeters(lat1, lon1, lat2, lon2){
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function loadRoomRefs(){
+  try{
+    const raw = localStorage.getItem(ROOM_REFS_KEY);
+    roomRefs = raw ? (JSON.parse(raw) || {}) : {};
+  }catch(_e){
+    roomRefs = {};
+  }
+}
+
+function saveRoomRefs(){
+  try{
+    localStorage.setItem(ROOM_REFS_KEY, JSON.stringify(roomRefs || {}));
+  }catch(_e){
+    // Ignore storage failures.
+  }
+}
+
+function loadRoomRef(){
+  const roomName = (roomNameInput.value || '').trim();
+  roomRef = roomName ? (roomRefs[roomName] || null) : null;
+  const note = document.getElementById('gps-note');
+  if(roomRef && roomName){
+    note.textContent = `GPS ref set for ${roomName} (radius ${Math.round(roomRef.radius_m || 60)} m).`;
+  } else {
+    note.textContent = roomName ? `No GPS ref saved for ${roomName}.` : 'Enter/select room name to use GPS room reference.';
+  }
+}
+
+function refreshGpsRoomMatch(){
+  return new Promise((resolve)=>{
+    if(!navigator.geolocation){
+      resolve(null);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition((pos)=>{
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      const acc = pos.coords.accuracy || null;
+      let roomMatch = null;
+      let matchedRoom = null;
+      if(roomRef && Number.isFinite(roomRef.lat) && Number.isFinite(roomRef.lon)){
+        const dist = haversineMeters(lat, lon, roomRef.lat, roomRef.lon);
+        const radius = Math.max(20, Number(roomRef.radius_m || 60));
+        roomMatch = dist <= radius;
+        if(roomMatch){
+          matchedRoom = (roomNameInput.value || '').trim() || null;
+        }
+      }
+      gpsState = { roomMatch, accuracyM: acc, lat, lon, ts: Date.now(), matchedRoom };
+      resolve(gpsState);
+    }, (_err)=> resolve(null), {enableHighAccuracy:true, timeout:3000, maximumAge:10000});
+  });
+}
+
+async function autoLoadRoomBaseline(roomName){
+  if(!roomName) return;
+  const now = Date.now();
+  if(autoLoadedRoom === roomName && (now - lastAutoLoadTs) < 45000) return;
+  if((now - lastAutoLoadTs) < 15000) return;
+  try{
+    const r = await fetch(API + '/api/room/baseline/select', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({room_name: roomName})
+    });
+    if(!r.ok) return;
+    const d = await r.json();
+    autoLoadedRoom = d.active_room || roomName;
+    lastAutoLoadTs = now;
+    setLog(`Auto-loaded baseline for ${autoLoadedRoom} from GPS room match.`);
+    updateBaselineNote({...(d || {}).baseline || {}, active_room: autoLoadedRoom});
+  }catch(_e){
+    // Retry later.
+  }
+}
+
+async function setRoomReference(){
+  if(!navigator.geolocation){
+    setStatus('Geolocation not supported on this browser/device.', 'err');
+    return;
+  }
+  const roomName = (roomNameInput.value || '').trim();
+  if(!roomName){
+    setStatus('Enter room name first, then set GPS reference.', 'warn');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition((pos)=>{
+    roomRef = {
+      lat: pos.coords.latitude,
+      lon: pos.coords.longitude,
+      radius_m: Math.max(30, Math.min(120, Math.round((pos.coords.accuracy || 30) * 2))),
+      set_ts: Date.now()
+    };
+    roomRefs[roomName] = roomRef;
+    saveRoomRefs();
+    loadRoomRef();
+    setStatus(`GPS reference saved for ${roomName}.`, 'ok');
+  }, (err)=>{
+    setStatus('GPS permission/location failed: ' + (err?.message || 'unknown error'), 'err');
+  }, {enableHighAccuracy:true, timeout:7000, maximumAge:0});
+}
+
+loadRoomRefs();
+loadRoomRef();
+
+function updateBaselineNote(base){
+  const note = document.getElementById('baseline-note');
+  if(!note) return;
+  if(!base || !base.ready){
+    note.style.color = 'var(--muted)';
+    note.textContent = 'Baseline not set.';
+    return;
+  }
+  const d = Number(base.current_distance_db || 0).toFixed(1);
+  const c = Math.round((base.comparison_confidence || 0) * 100);
+  const activeRoom = base.active_room ? `Room: ${base.active_room}. ` : '';
+  note.textContent = `${activeRoom}Baseline ready (${base.baseline_ap_count || 0} APs). Live delta ${d} dB, confidence ${c}%.`;
+  if((base.comparison_confidence || 0) >= 0.35 && (base.current_distance_db || 0) < 2.0){
+    note.style.color = 'var(--green)';
+  } else if((base.current_distance_db || 0) < 5.0){
+    note.style.color = 'var(--amber)';
+  } else {
+    note.style.color = 'var(--red)';
+  }
+}
+
+function updateRoomSelect(rooms, activeRoom){
+  const sel = document.getElementById('room-select');
+  if(!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">Saved rooms...</option>';
+  (rooms || []).forEach((r)=>{
+    const opt = document.createElement('option');
+    opt.value = r.room_name;
+    const ap = r.baseline_ap_count || 0;
+    opt.textContent = `${r.room_name}${r.is_active ? ' (active)' : ''} · ${ap} AP`;
+    sel.appendChild(opt);
+  });
+  if(activeRoom){
+    sel.value = activeRoom;
+    if(!roomNameInput.value) roomNameInput.value = activeRoom;
+  } else if(prev){
+    sel.value = prev;
+  }
+}
+
+async function loadBaselineStatus(){
+  try{
+    const r = await fetch(API + '/api/room/baselines');
+    if(!r.ok) return;
+    const d = await r.json();
+    updateBaselineNote(d.current || {});
+    updateRoomSelect(d.rooms || [], d.active_room || '');
+    loadRoomRef();
+  }catch(_e){
+    // Keep UI usable if backend temporarily unavailable.
+  }
+}
+
+async function doBaselineCapture(){
+  return doOccupancyBaselineCapture(0);
+}
+
+async function doOccupancyBaselineCapture(occupancyCount){
+  let roomName = (roomNameInput.value || '').trim();
+  if(!roomName){
+    roomName = (window.prompt('Name this room baseline:', '') || '').trim();
+    if(!roomName){
+      setStatus('Room name is required to save baseline.', 'warn');
+      return;
+    }
+    roomNameInput.value = roomName;
+    localStorage.setItem(ROOM_NAME_KEY, roomName);
+  }
+  try{
+    const r = await fetch(API + '/api/room/baseline/capture', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        confirm_empty: true,
+        scans: 8,
+        room_name: roomName,
+        save_room: true,
+        occupancy_count: Math.max(0, Number(occupancyCount || 0)),
+      })
+    });
+    if(!r.ok){
+      setStatus('Baseline capture failed (server error).', 'err');
+      return;
+    }
+    const d = await r.json();
+    updateBaselineNote({...(d || {}).baseline || {}, active_room: d.active_room || roomName});
+    await loadBaselineStatus();
+    if(d.ok){
+      const capOcc = Number(d.occupancy_count || 0);
+      setStatus(`Baseline (${capOcc} person) captured for ${d.saved_room || roomName}.`, 'ok');
+      setLog(`Baseline ${capOcc}p captured using ${d.used_vectors || 0} WiFi scans for room ${d.saved_room || roomName}.`);
+    } else {
+      setStatus('Baseline capture failed. Try again in a more stable signal area.', 'warn');
+    }
+  }catch(_e){
+    setStatus('Baseline capture failed. Backend unreachable.', 'err');
+  }
+}
+
+async function captureOccupancyBaseline(occupancyCount){
+  const n = Math.max(0, Number(occupancyCount || 0));
+  if(n <= 0){
+    await captureEmptyBaseline(0);
+    return;
+  }
+  if(baselineCountdownTimer){
+    clearInterval(baselineCountdownTimer);
+    baselineCountdownTimer = null;
+  }
+  setStatus(`Capture ${n}-person baseline now. Keep exactly ${n} person(s) in room.`, 'warn');
+  document.getElementById('baseline-note').textContent = `Capturing ${n}-person baseline now...`;
+  await doOccupancyBaselineCapture(n);
+}
+
+async function captureEmptyBaseline(delaySec){
+  if(baselineCountdownTimer){
+    clearInterval(baselineCountdownTimer);
+    baselineCountdownTimer = null;
+  }
+
+  let remaining = Math.max(0, Number(delaySec || 0));
+  if(remaining > 0){
+    setStatus(`Baseline capture in ${remaining}s. Leave the room now.`, 'warn');
+    document.getElementById('baseline-note').textContent = `Countdown: ${remaining}s before capture...`;
+    baselineCountdownTimer = setInterval(async()=>{
+      remaining -= 1;
+      if(remaining > 0){
+        document.getElementById('baseline-note').textContent = `Countdown: ${remaining}s before capture...`;
+        return;
+      }
+      clearInterval(baselineCountdownTimer);
+      baselineCountdownTimer = null;
+      document.getElementById('baseline-note').textContent = 'Capturing baseline now...';
+      await doBaselineCapture();
+    }, 1000);
+    return;
+  }
+
+  document.getElementById('baseline-note').textContent = 'Capturing baseline now...';
+  await doBaselineCapture();
+}
+
+async function clearEmptyBaseline(){
+  if(baselineCountdownTimer){
+    clearInterval(baselineCountdownTimer);
+    baselineCountdownTimer = null;
+  }
+  try{
+    const r = await fetch(API + '/api/room/baseline', {method:'DELETE'});
+    if(!r.ok){
+      setStatus('Failed to clear baseline.', 'err');
+      return;
+    }
+    const d = await r.json();
+    updateBaselineNote((d || {}).baseline || {});
+    await loadBaselineStatus();
+    setStatus('Baseline cleared.', 'warn');
+  }catch(_e){
+    setStatus('Failed to clear baseline. Backend unreachable.', 'err');
+  }
+}
+
+async function loadSelectedRoomBaseline(){
+  const sel = document.getElementById('room-select');
+  const room = (sel && sel.value) ? sel.value.trim() : '';
+  if(!room){
+    setStatus('Select a saved room first.', 'warn');
+    return;
+  }
+  try{
+    const r = await fetch(API + '/api/room/baseline/select', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({room_name: room})
+    });
+    if(!r.ok){
+      setStatus('Failed to load room baseline.', 'err');
+      return;
+    }
+    const d = await r.json();
+    roomNameInput.value = d.active_room || room;
+    localStorage.setItem(ROOM_NAME_KEY, roomNameInput.value);
+    loadRoomRef();
+    updateBaselineNote({...(d || {}).baseline || {}, active_room: d.active_room || room});
+    await loadBaselineStatus();
+    setStatus(`Loaded baseline for ${d.active_room || room}.`, 'ok');
+  }catch(_e){
+    setStatus('Failed to load room baseline. Backend unreachable.', 'err');
+  }
+}
+
+async function deleteSelectedRoomBaseline(){
+  const sel = document.getElementById('room-select');
+  const room = (sel && sel.value) ? sel.value.trim() : '';
+  if(!room){
+    setStatus('Select a saved room first.', 'warn');
+    return;
+  }
+  if(!window.confirm(`Delete saved baseline for room "${room}"?`)) return;
+  try{
+    const r = await fetch(API + '/api/room/baseline/' + encodeURIComponent(room), {method:'DELETE'});
+    if(!r.ok){
+      setStatus('Failed to delete saved room baseline.', 'err');
+      return;
+    }
+    await loadBaselineStatus();
+    setStatus(`Deleted saved baseline for ${room}.`, 'warn');
+  }catch(_e){
+    setStatus('Failed to delete room baseline. Backend unreachable.', 'err');
+  }
+}
+
+function setCollectLabel(label){
+  collectLabel = label;
+  ['idle','walk','squat','bend','lift','fall_risk'].forEach((k)=>{
+    const id = 'gc-' + (k === 'fall_risk' ? 'fall' : k);
+    const el = document.getElementById(id);
+    if(el) el.classList.toggle('active', k === label);
+  });
+  const note = document.getElementById('collect-note');
+  note.textContent = `Label: ${collectLabel.toUpperCase().replace('_',' ')} · Collected windows: ${collectWindowsSent}`;
+}
+
+function toggleCollection(){
+  collecting = !collecting;
+  const btn = document.getElementById('collect-btn');
+  if(collecting){
+    collectWindow = [];
+    btn.textContent = 'Stop Label Collection';
+    btn.classList.add('active');
+    setStatus(`Collecting label ${collectLabel}...`, 'ok');
+  }else{
+    btn.textContent = 'Start Label Collection';
+    btn.classList.remove('active');
+    setStatus('Label collection stopped.', 'warn');
+  }
+}
+
+async function flushLabeledWindow(){
+  if(collectWindow.length < 16) return;
+  const chunk = collectWindow.slice(0, 64);
+  collectWindow = collectWindow.slice(64);
+  try{
+    const r = await fetch(API + '/api/dataset/append', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        activity: collectLabel,
+        device_id: deviceId,
+        samples: chunk,
+        source_mode: 'real',
+        room_match: gpsState.roomMatch,
+        gps_accuracy_m: gpsState.accuracyM
+      })
+    });
+    if(r.ok){
+      collectWindowsSent += 1;
+      const note = document.getElementById('collect-note');
+      note.textContent = `Label: ${collectLabel.toUpperCase().replace('_',' ')} · Collected windows: ${collectWindowsSent}`;
+    }
+  }catch(_e){
+    // Keep UI responsive; collection can retry on next flush.
+  }
+}
+
+async function toggleCapture(){
+  if(capturing){
+    stopCapture();
+    return;
+  }
+  if(!window.isSecureContext && /iPhone|iPad|Android/i.test(navigator.userAgent)){
+    setStatus('Mobile requires HTTPS for real sensors. Use Sim Stream if needed.', 'err');
+    return;
+  }
+  if(typeof DeviceMotionEvent === 'undefined'){
+    setStatus('DeviceMotion not supported. Use Sim Stream.', 'err');
+    return;
+  }
+  if(typeof DeviceMotionEvent.requestPermission === 'function'){
+    try{
+      const p = await DeviceMotionEvent.requestPermission();
+      if(p !== 'granted'){
+        setStatus('Motion permission denied. Use Sim Stream.', 'err');
+        return;
+      }
+    }catch(e){
+      setStatus('Permission error: ' + e.message, 'err');
+      return;
+    }
+  }
+  capturing = true;
+  sawMotionEvent = false;
+  document.getElementById('start-btn').textContent = 'Stop Real Sensor';
+  document.getElementById('start-btn').className = 'btn btn-primary active';
+  setStatus('Streaming as ' + deviceId, 'ok');
+  setDot(true);
+  setLog('Sensor active. Move the phone.');
+  window.addEventListener('devicemotion', onMotion);
+  capInterval = setInterval(flush, 200);
+  setTimeout(()=>{
+    if(capturing && !sawMotionEvent){
+      setStatus('No motion events detected. Try Sim Stream.', 'warn');
+    }
+  }, 1800);
+}
+
+function stopCapture(){
+  capturing = false;
+  window.removeEventListener('devicemotion', onMotion);
+  clearInterval(capInterval);
+  document.getElementById('start-btn').textContent = 'Start Real Sensor';
+  document.getElementById('start-btn').className = 'btn btn-primary';
+  setStatus('Stopped.', 'warn');
+  setDot(false);
+  setLog('Stopped.');
+}
+
+function onMotion(e){
+  if(!capturing) return;
+  sawMotionEvent = true;
+  const a = e.accelerationIncludingGravity || {};
+  const r = e.rotationRate || {};
+  buf.push({
+    ax: a.x || 0,
+    ay: a.y || 0,
+    az: a.z || 0,
+    gx: (r.alpha || 0) * Math.PI / 180,
+    gy: (r.beta || 0) * Math.PI / 180,
+    gz: (r.gamma || 0) * Math.PI / 180,
+    ts: Date.now() / 1000
+  });
+  fpsCount++;
+  const ar = Math.sqrt((a.x || 0) ** 2 + (a.y || 0) ** 2 + (a.z || 0) ** 2);
+  const gr = Math.sqrt((r.alpha || 0) ** 2 + (r.beta || 0) ** 2 + (r.gamma || 0) ** 2) * Math.PI / 180;
+  document.getElementById('v-accel').textContent = ar.toFixed(2);
+  document.getElementById('v-gyro').textContent = gr.toFixed(2);
+  const now = Date.now();
+  if(now - lastFpsT > 1000){
+    document.getElementById('v-fps').textContent = fpsCount + '/s';
+    fpsCount = 0;
+    lastFpsT = now;
+  }
+}
+
+const SIM = {
+  idle:      {a:0.08, g:0.05, f:0.5},
+  walk:      {a:0.55, g:0.35, f:1.8},
+  squat:     {a:0.45, g:0.75, f:0.5},
+  bend:      {a:0.35, g:1.10, f:0.4},
+  lift:      {a:0.90, g:0.60, f:0.4},
+  fall_risk: {a:1.80, g:1.40, f:3.0}
+};
+
+function setSimMode(m){
+  simMode = m;
+  document.querySelectorAll('.btn-sim').forEach(b=>b.classList.remove('active'));
+  const id = 'ms-' + (m === 'fall_risk' ? 'fall' : m);
+  const el = document.getElementById(id);
+  if(el) el.classList.add('active');
+  if(simming) setStatus('Simulating ' + simMode + ' as ' + deviceId, 'ok');
+}
+
+function genSample(){
+  const p = SIM[simMode] || SIM.idle;
+  simPhase += 0.12;
+  const n = ()=> (Math.random() - 0.5) * 0.06;
+  const g = 9.81;
+  return {
+    ax: p.a * Math.sin(simPhase * p.f * 2) + n(),
+    ay: p.a * Math.cos(simPhase * p.f) + n(),
+    az: g + p.a * 0.3 * Math.sin(simPhase * p.f * 1.3) + n(),
+    gx: p.g * Math.sin(simPhase * p.f * 0.8) + n(),
+    gy: p.g * Math.cos(simPhase * p.f * 1.1) + n(),
+    gz: p.g * 0.6 * Math.sin(simPhase * p.f * 0.6) + n(),
+    ts: Date.now() / 1000
+  };
+}
+
+function simBLEScan(motionLevel){
+  blePhase += 0.08;
+  const scan = {};
+  BLE_BEACONS.forEach((b, i)=>{
+    const drift = Math.sin(blePhase + i * 1.1) * motionLevel * 5;
+    const noise = (Math.random() - 0.5) * 3;
+    scan[b.mac] = Math.max(-100, Math.min(-30, b.base + drift + noise));
+  });
+
+  const grid = document.getElementById('ble-grid');
+  grid.innerHTML = BLE_BEACONS.map(b=>{
+    const rssi = scan[b.mac] || b.base;
+    const pct = Math.max(0, Math.min(100, Math.round((rssi + 100) * 2)));
+    const col = pct > 60 ? 'var(--green)' : pct > 30 ? 'var(--amber)' : 'var(--red)';
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:7px 8px">
+      <div style="color:var(--muted);font-size:9px;margin-bottom:2px">${b.name}</div>
+      <div style="color:${col};font-size:13px;font-weight:700">${Math.round(rssi)} dBm</div>
+      <div style="height:3px;background:var(--border);border-radius:2px;margin-top:4px">
+        <div style="height:100%;width:${pct}%;background:${col};border-radius:2px;transition:width .3s"></div>
+      </div>
+    </div>`;
+  }).join('');
+  return scan;
+}
+
+function renderBLEGrid(scan, isReal){
+  const entries = Object.entries(scan || {});
+  const grid = document.getElementById('ble-grid');
+  if(!entries.length){
+    grid.innerHTML = '<div style="font-size:10px;color:var(--muted)">No BLE advertisements yet</div>';
+    return;
+  }
+
+  grid.innerHTML = entries.slice(0, 6).map(([id, rssi], i)=>{
+    const name = isReal ? `BLE ${id.slice(-6).toUpperCase()}` : (BLE_BEACONS.find(b=>b.mac===id)?.name || `Beacon ${i+1}`);
+    const pct = Math.max(0, Math.min(100, Math.round((rssi + 100) * 2)));
+    const col = pct > 60 ? 'var(--green)' : pct > 30 ? 'var(--amber)' : 'var(--red)';
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:7px 8px">
+      <div style="color:var(--muted);font-size:9px;margin-bottom:2px">${name}</div>
+      <div style="color:${col};font-size:13px;font-weight:700">${Math.round(rssi)} dBm</div>
+      <div style="height:3px;background:var(--border);border-radius:2px;margin-top:4px">
+        <div style="height:100%;width:${pct}%;background:${col};border-radius:2px;transition:width .3s"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function collectRealBLEScan(){
+  const now = Date.now();
+  const scan = {};
+  Object.keys(bleManualMap).forEach((id)=>{
+    if(now - bleManualMap[id].ts > 12000){
+      delete bleManualMap[id];
+      return;
+    }
+    bleManualMap[id].rssi += (Math.random() - 0.5) * 1.2;
+    scan[id] = bleManualMap[id].rssi;
+  });
+  Object.keys(bleRealMap).forEach((id)=>{
+    if(now - bleRealMap[id].ts > 5000){
+      delete bleRealMap[id];
+      return;
+    }
+    scan[id] = bleRealMap[id].rssi;
+  });
+  return scan;
+}
+
+async function toggleRealBLE(){
+  const btn = document.getElementById('ble-btn');
+  if(bleRealEnabled){
+    bleRealEnabled = false;
+    if(bleScanHandle && typeof bleScanHandle.stop === 'function'){
+      try{ bleScanHandle.stop(); }catch(_e){}
+    }
+    if(bleListener){
+      try{ navigator.bluetooth.removeEventListener('advertisementreceived', bleListener); }catch(_e){}
+    }
+    bleScanHandle = null;
+    bleListener = null;
+    bleManualMode = false;
+    btn.textContent = 'Enable Real BLE Scan';
+    setStatus('Real BLE scan stopped. Using simulated BLE.', 'warn');
+    return;
+  }
+
+  if(!navigator.bluetooth){
+    setStatus('Web Bluetooth is unavailable in this browser context.', 'err');
+    return;
+  }
+
+  if(typeof navigator.bluetooth.requestLEScan !== 'function'){
+    if(typeof navigator.bluetooth.requestDevice !== 'function'){
+      setStatus('Web Bluetooth present but no scan/pick APIs available.', 'err');
+      return;
+    }
+    try{
+      const dev = await navigator.bluetooth.requestDevice({acceptAllDevices:true, optionalServices:['battery_service']});
+      const id = (dev && dev.id) ? dev.id : ('picked_' + Math.random().toString(36).slice(2,8));
+      bleManualMap[id] = {rssi: -66 + (Math.random() - 0.5) * 8, ts: Date.now()};
+      bleManualMode = true;
+      bleRealEnabled = true;
+      btn.textContent = 'Disable Real BLE Scan';
+      setStatus('Passive BLE scan API unavailable. Using manual BLE pick mode.', 'warn');
+    }catch(e){
+      setStatus('BLE device pick failed: ' + (e?.message || 'unknown error'), 'err');
+    }
+    return;
+  }
+
+  try{
+    bleScanHandle = await navigator.bluetooth.requestLEScan({acceptAllAdvertisements:true, keepRepeatedDevices:true});
+    bleListener = (event)=>{
+      if(typeof event.rssi !== 'number') return;
+      const id = (event.device && event.device.id) ? event.device.id : ('dev_' + Math.random().toString(36).slice(2, 8));
+      bleRealMap[id] = {rssi: event.rssi, ts: Date.now()};
+    };
+    navigator.bluetooth.addEventListener('advertisementreceived', bleListener);
+    bleRealEnabled = true;
+    btn.textContent = 'Disable Real BLE Scan';
+    setStatus('Real BLE scanning enabled.', 'ok');
+  }catch(e){
+    setStatus('BLE permission/scan failed: ' + (e?.message || 'unknown error'), 'err');
+  }
+}
+
+function toggleSim(){
+  if(simming){
+    simming = false;
+    clearInterval(simInterval);
+    document.getElementById('sim-btn').textContent = 'Start Sim Stream';
+    setStatus('Simulation stopped.', 'warn');
+    setDot(false);
+    setLog('Sim stopped.');
+    return;
+  }
+
+  simming = true;
+  document.getElementById('sim-btn').textContent = 'Stop Sim Stream';
+  setStatus('Simulating ' + simMode + ' as ' + deviceId, 'ok');
+  setDot(true);
+
+  simInterval = setInterval(async()=>{
+    const samples = Array.from({length:6}, genSample);
+    const ar = Math.sqrt(samples[0].ax ** 2 + samples[0].ay ** 2 + samples[0].az ** 2);
+    const gr = Math.sqrt(samples[0].gx ** 2 + samples[0].gy ** 2 + samples[0].gz ** 2);
+    document.getElementById('v-accel').textContent = ar.toFixed(2);
+    document.getElementById('v-gyro').textContent = gr.toFixed(2);
+
+    fpsCount += 6;
+    const now = Date.now();
+    if(now - lastFpsT > 1000){
+      document.getElementById('v-fps').textContent = fpsCount + '/s';
+      fpsCount = 0;
+      lastFpsT = now;
+    }
+
+    total += samples.length;
+    document.getElementById('v-total').textContent = total;
+    await send(samples, true);
+  }, 200);
+}
+
+async function flush(){
+  if(!buf.length) return;
+  const samples = buf.slice();
+  buf = [];
+  total += samples.length;
+  document.getElementById('v-total').textContent = total;
+  await send(samples, false);
+}
+
+async function send(samples, isSim){
+  if(Date.now() - (gpsState.ts || 0) > 4500){
+    await refreshGpsRoomMatch();
+    if(gpsState.roomMatch && gpsState.matchedRoom){
+      await autoLoadRoomBaseline(gpsState.matchedRoom);
+    }
+  }
+  if(collecting && !isSim){
+    for(let i=0;i<samples.length;i++) collectWindow.push(samples[i]);
+    if(collectWindow.length >= 64){
+      await flushLabeledWindow();
+    }
+  }
+  const motionLevel = isSim ? (SIM[simMode] || SIM.idle).a : 0.3;
+  const simScan = simBLEScan(motionLevel);
+  const realScan = bleRealEnabled ? collectRealBLEScan() : {};
+  const bleScan = Object.keys(realScan).length ? realScan : simScan;
+  renderBLEGrid(bleScan, Object.keys(realScan).length > 0);
+  try{
+    const r = await fetch(API + '/api/imu', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        samples: samples,
+        device_id: deviceId,
+        source_mode: isSim ? 'sim' : 'real',
+        sim_activity: isSim ? simMode : null,
+        ble_scan: bleScan,
+        room_match: gpsState.roomMatch,
+        gps_accuracy_m: gpsState.accuracyM
+      })
+    });
+
+    if(!r.ok){
+      setLog('Server error ' + r.status);
+      return;
+    }
+
+    const d = await r.json();
+    document.getElementById('sf-activity').textContent = 'Activity: ' + (d.activity || '--') + ' (' + Math.round((d.confidence || 0) * 100) + '%)';
+    const fr = d.fall_risk || 0;
+    const frEl = document.getElementById('sf-fall');
+    frEl.textContent = 'Fall Risk: ' + Math.round(fr) + '%';
+    frEl.style.color = fr > 60 ? 'var(--red)' : fr > 30 ? 'var(--amber)' : 'var(--green)';
+    document.getElementById('sf-persons').textContent = 'Persons in room: ' + (d.person_count ?? 0);
+    const rm = (d.room_match === null || typeof d.room_match === 'undefined') ? 'unknown' : (d.room_match ? 'yes' : 'no');
+    document.getElementById('sf-room').textContent = 'Room match: ' + rm + (gpsState.accuracyM ? ` (${Math.round(gpsState.accuracyM)}m)` : '');
+    setLog('OK ' + deviceId + ' | ' + (d.activity || 'idle') + ' | est ' + (d.estimated_count ?? d.person_count ?? 0) + ' person(s)');
+  }catch(_e){
+    setLog('Backend unreachable. Check URL and WiFi.');
+    setDot(false);
+  }
+}
+
+const initScan = simBLEScan(0.2);
+renderBLEGrid(initScan, false);
+loadBaselineStatus();
+setInterval(loadBaselineStatus, 6000);
+</script>
+</body>
+</html>

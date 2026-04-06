@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PhysioTracker v3 — Motion Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#060810;--bg2:#0c1018;--bg3:#111827;--border:#1a2235;--border2:#233048;
+  --text:#e2e8f8;--muted:#8496b4;--dim:#3d4f6e;
+  --cyan:#00e5ff;--cyan2:#00b4d8;--green:#00ff9d;--amber:#ffb627;
+  --red:#ff3d5a;--purple:#b57aff;--pink:#ff6eb4;
+  --mono:'IBM Plex Mono',monospace;--display:'Syne',sans-serif;--body:'Inter',sans-serif
+}
+*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--body);overflow-x:hidden;min-height:100vh}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,229,255,.011) 2px,rgba(0,229,255,.011) 4px)}
+
+/* Header */
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 28px;
+  border-bottom:1px solid var(--border);background:rgba(6,8,16,.94);position:sticky;top:0;z-index:100;backdrop-filter:blur(20px)}
+.logo{display:flex;align-items:center;gap:10px;font-family:var(--display);font-size:17px;font-weight:800;letter-spacing:-.03em;color:var(--cyan)}
+.logo svg{width:28px;height:28px}
+.hright{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.badge{font-family:var(--mono);font-size:9px;letter-spacing:.08em;padding:3px 9px;border-radius:4px;border:1px solid var(--border2);color:var(--muted);display:inline-flex;align-items:center;gap:4px}
+.badge.live{border-color:var(--cyan);color:var(--cyan)}
+.badge.green{border-color:var(--green);color:var(--green)}
+.badge.red{border-color:var(--red);color:var(--red)}
+.badge.amber{border-color:var(--amber);color:var(--amber)}
+.pdot{display:inline-block;width:5px;height:5px;border-radius:50%;background:currentColor;animation:pg 1.5s ease-in-out infinite}
+@keyframes pg{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.75)}}
+
+/* Layout */
+.layout{display:grid;grid-template-columns:300px 1fr 280px;min-height:calc(100vh - 53px)}
+.left-panel{border-right:1px solid var(--border);padding:14px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+.center-panel{padding:14px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+.right-panel{border-left:1px solid var(--border);padding:14px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+
+/* Cards */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:13px;position:relative;overflow:hidden}
+.card-title{font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:5px}
+.card-title .ct-right{margin-left:auto;color:var(--dim)}
+
+/* Activity */
+.act-main{font-family:var(--display);font-size:36px;font-weight:800;letter-spacing:-.04em;line-height:1;text-transform:uppercase;transition:all .4s}
+.act-sub{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:4px}
+.cbar{height:3px;background:var(--border2);border-radius:2px;margin-top:7px}
+.cbar-fill{height:100%;border-radius:2px;transition:width .5s}
+
+/* Metric grid */
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mitem{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:8px 10px}
+.mlbl{font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px}
+.mval{font-family:var(--mono);font-size:17px;font-weight:600;line-height:1}
+.munit{font-size:9px;color:var(--muted);margin-left:1px}
+.mbar{height:2px;background:var(--border);border-radius:1px;margin-top:4px}
+.mbar-fill{height:100%;border-radius:1px;transition:width .5s}
+
+/* Sensors */
+.srow{display:flex;align-items:center;gap:7px;padding:6px 0;border-bottom:1px solid var(--border)}
+.srow:last-child{border-bottom:none}
+.sdot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.sname{font-family:var(--mono);font-size:9px;color:var(--text);flex:1}
+.sbadge{font-family:var(--mono);font-size:8px;letter-spacing:.04em;padding:2px 5px;border-radius:3px}
+.sbar{flex:1;height:2px;background:var(--border);border-radius:1px}
+.sbar-fill{height:100%;border-radius:1px;transition:width .5s}
+.sscore{font-family:var(--mono);font-size:10px;font-weight:600;min-width:26px;text-align:right}
+
+/* WiFi */
+.wnet{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:9px}
+.wnet:last-child{border-bottom:none}
+.wssid{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;max-width:110px}
+.wbars{display:flex;gap:2px;align-items:flex-end}
+.wbseg{width:3px;background:var(--border2);border-radius:1px}
+.wrssi{color:var(--cyan);min-width:40px;text-align:right}
+
+/* Simulation */
+.sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.sbtn{background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--muted);
+  font-family:var(--mono);font-size:9px;font-weight:600;padding:7px 3px;cursor:pointer;
+  text-align:center;letter-spacing:.05em;text-transform:uppercase;transition:all .2s}
+.sbtn:hover{border-color:var(--cyan);color:var(--cyan)}
+.sbtn.active{border-color:var(--cyan);color:var(--bg);background:var(--cyan)}
+
+/* Summary strip */
+.strip{display:flex;background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.sblock{flex:1;text-align:center;padding:10px 6px;border-right:1px solid var(--border)}
+.sblock:last-child{border-right:none}
+.snum{font-family:var(--display);font-size:26px;font-weight:800;line-height:1}
+.slbl{font-family:var(--mono);font-size:7px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-top:2px}
+
+/* Silhouette */
+.silwrap{background:var(--bg);border:1px solid var(--border2);border-radius:10px;position:relative;overflow:hidden;flex:1;min-height:380px}
+#silCanvas{width:100%;height:100%;display:block}
+
+/* Timeline */
+.trow{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:9px}
+.trow:last-child{border-bottom:none}
+
+/* Chat */
+.chatbox{flex:1;min-height:100px;max-height:170px;overflow-y:auto;background:var(--bg);border:1px solid var(--border2);border-radius:7px;padding:9px 11px;font-size:11px;line-height:1.6}
+.cmsg{margin-bottom:6px}
+.cmsg .who{font-family:var(--mono);font-size:8px;color:var(--muted);margin-bottom:1px}
+.cmsg.ai .text{color:var(--cyan)}
+.cinput-row{display:flex;gap:6px;margin-top:6px}
+.cinput{flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:var(--body);font-size:11px;padding:5px 9px;outline:none}
+.cinput:focus{border-color:var(--cyan)}
+.cbtn{background:var(--cyan);color:var(--bg);border:none;border-radius:5px;font-family:var(--mono);font-size:10px;font-weight:600;padding:5px 11px;cursor:pointer}
+
+/* Fall ring */
+.fall-ring{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid var(--border);font-family:var(--mono);font-size:13px;font-weight:700;transition:all .5s}
+
+/* Phone prompt */
+.phone-prompt{background:rgba(0,255,157,.05);border:1px solid rgba(0,255,157,.18);border-radius:7px;padding:9px;font-size:10px;line-height:1.6;color:var(--muted)}
+.phone-url{font-family:var(--mono);font-size:8px;color:var(--green);word-break:break-all;margin-top:5px}
+.phone-url-note{font-family:var(--mono);font-size:8px;color:var(--amber);margin-top:4px;line-height:1.5}
+
+/* Frontend status */
+.frontend-status{font-family:var(--mono);font-size:9px;border:1px solid var(--border2);border-radius:8px;padding:7px 10px;background:var(--bg2);color:var(--muted)}
+.frontend-status.ok{border-color:rgba(0,255,157,.35);color:var(--green)}
+.frontend-status.warn{border-color:rgba(255,182,39,.35);color:var(--amber)}
+.frontend-status.err{border-color:rgba(255,61,90,.35);color:var(--red)}
+
+.force-label{font-family:var(--mono);font-size:8px;letter-spacing:.08em;border:1px solid var(--border2);border-radius:4px;padding:2px 6px;color:var(--muted)}
+.force-label.on{border-color:rgba(255,182,39,.5);color:var(--amber)}
+.force-label.off{border-color:rgba(0,255,157,.45);color:var(--green)}
+
+/* ML Model panel */
+.ml-bar{height:4px;background:var(--border2);border-radius:2px;margin:2px 0 8px}
+.ml-fill{height:100%;border-radius:2px;transition:width .6s;background:linear-gradient(90deg,var(--purple),var(--cyan))}
+.ml-prob-row{display:flex;align-items:center;gap:5px;padding:2px 0;font-family:var(--mono);font-size:9px}
+.ml-prob-label{width:55px;color:var(--muted);flex-shrink:0}
+.ml-prob-bar{flex:1;height:2px;background:var(--border);border-radius:1px}
+.ml-prob-fill{height:100%;border-radius:1px;transition:width .4s}
+.ml-prob-val{width:30px;text-align:right;color:var(--text)}
+
+/* Avatar cards */
+.avatar-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:8px}
+.avatar-card{background:linear-gradient(180deg,var(--bg3),rgba(17,24,39,.92));border:1px solid var(--border);border-radius:9px;padding:10px;min-height:98px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 10px 24px rgba(0,0,0,.18)}
+.avatar-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.avatar-badge{width:30px;height:30px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--bg)}
+.avatar-name{font-family:var(--mono);font-size:9px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+.avatar-act{font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
+.avatar-meta{font-family:var(--mono);font-size:8px;color:var(--dim);line-height:1.5;margin-top:3px}
+.avatar-strip{height:4px;background:var(--border2);border-radius:999px;overflow:hidden}
+.avatar-strip > div{height:100%;border-radius:inherit;transition:width .35s ease}
+
+/* Radar */
+.radar-wrap{position:relative;height:160px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;overflow:hidden}
+#radarCanvas{width:100%;height:100%;display:block}
+
+/* Chart */
+.chart-wrap{position:relative;height:90px}
+
+/* Phone IMU info row */
+.imu-row{display:flex;gap:8px;font-family:var(--mono);font-size:9px;margin-top:6px}
+.imu-val{color:var(--green)}
+
+@keyframes fadeInUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+@media(max-width:1100px){.layout{grid-template-columns:260px 1fr 250px}}
+@media(max-width:900px){.layout{grid-template-columns:1fr};.left-panel,.right-panel{border:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 28 28" fill="none">
+      <circle cx="14" cy="14" r="13" stroke="#00e5ff" stroke-width=".7" opacity=".3"/>
+      <circle cx="14" cy="6.5" r="3" fill="#00e5ff"/>
+      <line x1="14" y1="9.5" x2="14" y2="19" stroke="#00e5ff" stroke-width="2.2" stroke-linecap="round"/>
+      <line x1="14" y1="12" x2="8" y2="16" stroke="#00e5ff" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="14" y1="12" x2="20" y2="16" stroke="#00e5ff" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="14" y1="19" x2="9" y2="25.5" stroke="#00e5ff" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="14" y1="19" x2="19" y2="25.5" stroke="#00e5ff" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+    PHYSIOTRACKER<span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:4px">v3</span>
+  </div>
+  <div class="hright">
+    <span class="badge green" id="phone-badge" style="display:none"><span class="pdot"></span>PHONE IMU</span>
+    <span class="badge live" id="ws-badge"><span class="pdot"></span>CONNECTING</span>
+    <span class="badge" id="strict-badge">MODE: MIXED</span>
+    <span class="badge" id="ml-badge" style="border-color:var(--purple);color:var(--purple)">ML: loading</span>
+    <span class="badge" id="wifi-count">WiFi: --</span>
+  </div>
+</header>
+
+<div class="layout">
+<!-- ═══════ LEFT ═══════ -->
+<div class="left-panel">
+
+  <div class="card">
+    <div class="card-title">⬤ ACTIVITY</div>
+    <div class="act-main" id="act-label" style="color:var(--cyan)">IDLE</div>
+    <div class="act-sub" id="act-sub">Waiting for data...</div>
+    <div class="cbar"><div class="cbar-fill" id="cbar-fill" style="width:0%;background:var(--cyan)"></div></div>
+    <div style="font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:3px">CONFIDENCE: <span id="conf-pct" style="color:var(--muted)">0%</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">◈ PERSONS IN ROOM</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div>
+        <div style="font-family:var(--display);font-size:36px;font-weight:800;color:var(--cyan)" id="person-count">0</div>
+        <div style="font-family:var(--mono);font-size:8px;color:var(--muted)" id="person-source-lbl">Exact: 0 · Estimate: 0</div>
+      </div>
+      <div id="person-icons" style="display:flex;gap:4px;flex-wrap:wrap;flex:1"></div>
+    </div>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span style="font-family:var(--mono);font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Room target</span>
+      <input id="room-target-input" type="number" min="1" max="10" value="1" style="width:56px;background:var(--bg3);border:1px solid var(--border2);border-radius:5px;color:var(--text);padding:4px 6px;font-family:var(--mono);font-size:10px"/>
+      <label style="display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:8px;color:var(--muted)">
+        <input id="room-force-input" type="checkbox" style="accent-color:#ffb627"/>
+        Force
+      </label>
+      <span id="room-force-label" class="force-label off">APPLIED: OFF</span>
+      <button class="cbtn" style="padding:4px 8px" onclick="setRoomTarget()">SET</button>
+    </div>
+    <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <button id="strict-toggle-btn" class="cbtn" style="padding:4px 8px;border:1px solid var(--green)" onclick="toggleStrictMode()">STRICT: OFF</button>
+      <span id="strict-mode-note" style="font-family:var(--mono);font-size:8px;color:var(--muted)">Core simulated sensors can be disabled here</span>
+    </div>
+    <div style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <button class="cbtn" style="padding:4px 8px;border:1px solid var(--cyan)" onclick="captureEmptyBaseline()">CAPTURE EMPTY BASELINE</button>
+      <button class="cbtn" style="padding:4px 8px" onclick="clearEmptyBaseline()">CLEAR BASELINE</button>
+      <span id="baseline-status" style="font-family:var(--mono);font-size:8px;color:var(--muted)">Baseline: not set</span>
+    </div>
+    <!-- Per-person cards — injected by JS -->
+    <div id="persons-detail" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:6px" id="room-target-status">Target: 1</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">◎ PHYSIO METRICS</div>
+    <div class="mgrid">
+      <div class="mitem"><div class="mlbl">Gait</div><div class="mval"><span id="m-gait">0</span><span class="munit">/100</span></div><div class="mbar"><div class="mbar-fill" id="mb-gait" style="background:var(--cyan)"></div></div></div>
+      <div class="mitem"><div class="mlbl">ROM</div><div class="mval"><span id="m-rom">0</span><span class="munit">/100</span></div><div class="mbar"><div class="mbar-fill" id="mb-rom" style="background:var(--purple)"></div></div></div>
+      <div class="mitem"><div class="mlbl">Symmetry</div><div class="mval"><span id="m-sym">0</span><span class="munit">%</span></div><div class="mbar"><div class="mbar-fill" id="mb-sym" style="background:var(--green)"></div></div></div>
+      <div class="mitem"><div class="mlbl">Cadence</div><div class="mval"><span id="m-cad">0</span><span class="munit">spm</span></div><div class="mbar"><div class="mbar-fill" id="mb-cad" style="background:var(--amber)"></div></div></div>
+      <div class="mitem"><div class="mlbl">Fatigue</div><div class="mval"><span id="m-fat">0</span><span class="munit">/100</span></div><div class="mbar"><div class="mbar-fill" id="mb-fat" style="background:var(--amber)"></div></div></div>
+      <div class="mitem"><div class="mlbl">Reps</div><div class="mval"><span id="m-rep">0</span></div><div class="mbar"><div class="mbar-fill" id="mb-rep" style="background:var(--pink)"></div></div></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:9px">
+      <div class="fall-ring" id="fall-ring"><span id="m-fall">0</span></div>
+      <div>
+        <div style="font-family:var(--mono);font-size:8px;color:var(--muted)">FALL RISK</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:1px" id="fall-desc">Low risk</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">▷ SIMULATE ACTIVITY</div>
+    <div class="sgrid">
+      <button class="sbtn active" id="sb-idle"      onclick="simulate('idle')">IDLE</button>
+      <button class="sbtn"        id="sb-walk"      onclick="simulate('walk')">WALK</button>
+      <button class="sbtn"        id="sb-squat"     onclick="simulate('squat')">SQUAT</button>
+      <button class="sbtn"        id="sb-bend"      onclick="simulate('bend')">BEND</button>
+      <button class="sbtn"        id="sb-lift"      onclick="simulate('lift')">LIFT</button>
+      <button class="sbtn"        id="sb-fall_risk" onclick="simulate('fall_risk')">FALL ⚠</button>
+    </div>
+    <div style="font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:7px">
+      Simulates IMU + activity. Phone simulate overrides with real-looking sensor data.
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════ CENTER ═══════ -->
+<div class="center-panel">
+
+  <div class="strip">
+    <div class="sblock"><div class="snum" id="s-fused" style="color:var(--cyan)">0</div><div class="slbl">Motion Score</div></div>
+    <div class="sblock"><div class="snum" id="s-wifi" style="color:var(--cyan2)">0</div><div class="slbl">WiFi APs</div></div>
+    <div class="sblock"><div class="snum" id="s-persons" style="color:var(--green)">0</div><div class="slbl">Persons</div></div>
+    <div class="sblock"><div class="snum" id="s-hz" style="color:var(--purple)">10</div><div class="slbl">Update Hz</div></div>
+  </div>
+
+  <div id="frontend-status" class="frontend-status warn">Waiting for live sensor stream...</div>
+
+  <div class="silwrap">
+    <canvas id="silCanvas"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="card-title">▷ REAL-TIME SENSOR FUSION</div>
+    <div class="chart-wrap"><canvas id="fusionChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📱 PHONE STREAMS <span id="phone-status-lbl" style="color:var(--dim);margin-left:4px">— none connected</span></div>
+    <div class="phone-prompt">
+      <strong style="color:var(--green)">Multi-person: open on each phone (same WiFi)</strong><br>
+      Each phone gets a unique Device ID → tracked as a separate person.
+      <div class="phone-url" id="phone-url">Loading...</div>
+      <div class="phone-url-note" id="phone-url-note"></div>
+    </div>
+    <!-- Connected devices list -->
+    <div id="phone-devices-list" style="margin-top:8px;display:flex;flex-direction:column;gap:5px;max-height:120px;overflow-y:auto">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--dim)">No phones connected yet</div>
+    </div>
+    <div class="imu-row" style="margin-top:6px">
+      <span style="color:var(--muted)">Accel:</span><span class="imu-val" id="phone-accel">--</span>
+      <span style="color:var(--muted)">Gyro:</span><span class="imu-val" id="phone-gyro">--</span>
+      <span style="color:var(--muted)">Jerk:</span><span style="color:var(--amber)" id="phone-jerk">--</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════ RIGHT ═══════ -->
+<div class="right-panel">
+
+  <div class="card">
+    <div class="card-title">◉ SIGNAL SOURCES</div>
+    <div id="sensor-rows">
+      <div class="srow"><div class="sdot" style="background:var(--cyan)"></div><div class="sname">WiFi RSSI</div><span class="sbadge" style="background:rgba(0,229,255,.1);color:var(--cyan)">REAL</span><div class="sbar"><div class="sbar-fill" id="sfill-wifi" style="background:var(--cyan)"></div></div><div class="sscore" id="ss-wifi" style="color:var(--cyan)">0</div></div>
+      <div class="srow"><div class="sdot" style="background:var(--purple)"></div><div class="sname">Bluetooth BLE</div><span class="sbadge" style="background:rgba(181,122,255,.1);color:var(--purple)">SIM</span><div class="sbar"><div class="sbar-fill" id="sfill-bt" style="background:var(--purple)"></div></div><div class="sscore" id="ss-bt" style="color:var(--purple)">0</div></div>
+      <div class="srow"><div class="sdot" style="background:var(--green)"></div><div class="sname">IMU (Accel+Gyro)</div><span class="sbadge" id="imu-badge" style="background:rgba(0,255,157,.1);color:var(--green)">SIM</span><div class="sbar"><div class="sbar-fill" id="sfill-imu" style="background:var(--green)"></div></div><div class="sscore" id="ss-imu" style="color:var(--green)">0</div></div>
+      <div class="srow"><div class="sdot" style="background:var(--amber)"></div><div class="sname">Acoustic Doppler</div><span class="sbadge" style="background:rgba(255,182,39,.1);color:var(--amber)">SIM</span><div class="sbar"><div class="sbar-fill" id="sfill-ac" style="background:var(--amber)"></div></div><div class="sscore" id="ss-ac" style="color:var(--amber)">0</div></div>
+      <div class="srow"><div class="sdot" style="background:var(--red)"></div><div class="sname">Ambient RF</div><span class="sbadge" style="background:rgba(255,61,90,.1);color:var(--red)">SIM</span><div class="sbar"><div class="sbar-fill" id="sfill-rf" style="background:var(--red)"></div></div><div class="sscore" id="ss-rf" style="color:var(--red)">0</div></div>
+    </div>
+    <div style="font-family:var(--mono);font-size:8px;color:var(--dim);line-height:1.5;margin-top:7px">
+      Person count: estimated from room signals, then matched to connected phones when available. WiFi RSSI is the strongest room-wide input. BLE/RF/Acoustic are contextual support.
+    </div>
+  </div>
+
+  <!-- WiFi Networks Panel -->
+  <div class="card">
+    <div class="card-title">◎ WiFi NETWORKS <span class="ct-right" id="wifi-ap-count">(0)</span></div>
+    <div id="wifi-list" style="max-height:180px;overflow-y:auto">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--dim)">Scanning for networks...</div>
+    </div>
+    <div id="wifi-status" style="font-family:var(--mono);font-size:8px;color:var(--muted);margin-top:6px">Waiting for WiFi scan data...</div>
+    <div style="font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:6px">
+      RSSI fingerprinting for presence detection
+    </div>
+  </div>
+
+  <!-- ML Model Panel -->
+  <div class="card">
+    <div class="card-title">◈ ML MODEL <span class="ct-right" id="ml-acc-lbl">--</span></div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:8px" id="ml-model-name">Loading...</div>
+    <div style="font-family:var(--mono);font-size:8px;color:var(--dim);margin-bottom:3px">Activity probabilities</div>
+    <div id="ml-probs"></div>
+    <div style="margin-top:8px;font-family:var(--mono);font-size:8px;color:var(--dim)">Top feature importances</div>
+    <div id="ml-fi" style="margin-top:4px"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">◈ ROOM OCCUPANCY</div>
+    <div class="radar-wrap"><canvas id="radarCanvas"></canvas></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:6px">
+      <span>WiFi fingerprint positioning</span>
+      <span id="room-exact-count">Exact: --</span>
+      <span id="room-estimate-count">Estimate: --</span>
+      <span id="room-estimate-line">Room state: unknown</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">◷ ACTIVITY TIMELINE</div>
+    <div id="timeline-list" style="max-height:110px;overflow-y:auto">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--dim)">No events yet</div>
+    </div>
+  </div>
+
+  <div class="card" style="flex:1;display:flex;flex-direction:column">
+    <div class="card-title">◈ AI COACH <span style="color:var(--cyan)">Claude</span></div>
+    <div class="chatbox" id="chat-box">
+      <div class="cmsg ai"><div class="who">PHYSIOTRACKER AI</div><div class="text">Hello! I'm your AI physiotherapy coach. Ask about movement quality, metrics, or exercises.</div></div>
+    </div>
+    <div class="cinput-row">
+      <input class="cinput" id="chat-input" placeholder="Ask the AI coach..." onkeydown="if(event.key==='Enter')sendChat()"/>
+      <button class="cbtn" onclick="sendChat()">ASK</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+function normalizeBaseUrl(value){
+  return (value || '').replace(/\/$/, '');
+}
+const params = new URLSearchParams(location.search);
+const apiOverride = params.get('api');
+const wsOverride = params.get('ws');
+const API = normalizeBaseUrl(apiOverride || (location.protocol === 'file:' ? 'http://localhost:8000' : location.origin));
+const WS_BASE = normalizeBaseUrl(wsOverride || (location.protocol === 'file:' ? 'ws://localhost:8000' : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`));
+const WS_URL = `${WS_BASE}/ws/stream`;
+const ACT_COLORS = {idle:'#8496b4',walk:'#22d3ee',squat:'#8b5cf6',bend:'#34d399',lift:'#f59e0b',fall_risk:'#ef4444'};
+const ACT_ICONS  = {idle:'◆',walk:'▶',squat:'▼',bend:'◀',lift:'▲',fall_risk:'⚠'};
+const ML_PROB_COLS = {idle:'#8496b4',walk:'#22d3ee',squat:'#8b5cf6',bend:'#34d399',lift:'#f59e0b',fall_risk:'#ef4444'};
+const PERSON_COLORS = ['#22d3ee','#8b5cf6','#f59e0b','#34d399','#ff6eb4','#7affb0'];
+
+let latestData=null, fusHistory=Array(80).fill(0), fpsCounter=0, lastFpsT=Date.now();
+let persons=[{x:.5,y:.5,confidence:.6,id:0}], curActivity='idle';
+let silPhase=0, silPose={headBob:0,armL:0,armR:0,legL:0,legR:0,torsoLean:0,torsoSway:0};
+const renderPersonState = new Map();
+// Per-person pose state keyed by index — each person lerps to their own activity pose
+const personPoseState = {};   // { index: {headBob,armL,...,phase} }
+function getPersonPose(idx) {
+  if (!personPoseState[idx]) {
+    personPoseState[idx] = {headBob:0,armL:0,armR:0,legL:0,legR:0,torsoLean:0,torsoSway:0,phase:idx*1.7};
+  }
+  return personPoseState[idx];
+}
+let mlInfoLoaded=false;
+let hasSeenWsPayload=false;
+let pollFallbackStarted=false;
+let fusionChart=null;
+
+const POSES={
+  idle:     {headBob:0, armL:0,   armR:0,   legL:0,  legR:0,  torsoLean:0,  torsoSway:0},
+  walk:     {headBob:1, armL:35,  armR:-35, legL:30, legR:-30,torsoLean:3,  torsoSway:1},
+  squat:    {headBob:0, armL:20,  armR:20,  legL:-40,legR:-40,torsoLean:10, torsoSway:0},
+  bend:     {headBob:0, armL:60,  armR:60,  legL:0,  legR:0,  torsoLean:50, torsoSway:0},
+  lift:     {headBob:0, armL:-50, armR:-50, legL:0,  legR:0,  torsoLean:-10,torsoSway:0},
+  fall_risk:{headBob:2, armL:60,  armR:-60, legL:50, legR:-20,torsoLean:30, torsoSway:3},
+};
+
+// ── WebSocket ────────────────────────────────────────────────────────────
+function setFrontendStatus(message, level='warn'){
+  const el = document.getElementById('frontend-status');
+  if(!el) return;
+  el.textContent = message;
+  el.className = `frontend-status ${level}`;
+}
+
+function connectWS(){
+  if(location.protocol === 'file:'){
+    setFrontendStatus(`Opened as file. Using backend ${API}. Prefer opening ${API}/ in browser.`, 'warn');
+  }
+  const ws=new WebSocket(WS_URL);
+  ws.onopen=()=>{
+    const b=document.getElementById('ws-badge');
+    b.innerHTML='<span class="pdot"></span>LIVE';
+    b.className='badge live';
+    setFrontendStatus('Connected to backend. Waiting for sensor frames...', 'warn');
+  };
+  ws.onmessage=(e)=>{
+    try {
+      const d=JSON.parse(e.data);
+      latestData=d;
+      fpsCounter++;
+      if(!hasSeenWsPayload){
+        hasSeenWsPayload=true;
+        setFrontendStatus('Live stream active. Dashboard is receiving sensor data.', 'ok');
+      }
+      try {
+        updateDash(d);
+      } catch (renderErr) {
+        setFrontendStatus(`Render error: ${String(renderErr).slice(0, 90)}`, 'err');
+      }
+    } catch (err) {
+      setFrontendStatus(`Malformed stream payload: ${String(err).slice(0, 90)}`, 'err');
+    }
+  };
+  ws.onerror=()=>{
+    setFrontendStatus('WebSocket error. Verify backend URL and browser mixed-content policy.', 'err');
+  };
+  ws.onclose=()=>{
+    const b=document.getElementById('ws-badge');
+    b.textContent='OFFLINE';
+    b.className='badge red';
+    hasSeenWsPayload=false;
+    setFrontendStatus('Stream disconnected. Reconnecting...', 'warn');
+    setTimeout(connectWS,2000);
+  };
+}
+
+function setForceAppliedLabel(isOn){
+  const lbl = document.getElementById('room-force-label');
+  if(!lbl) return;
+  lbl.textContent = `APPLIED: ${isOn ? 'ON' : 'OFF'}`;
+  lbl.className = `force-label ${isOn ? 'on' : 'off'}`;
+}
+
+async function loadRoomTarget(){
+  try{
+    const r = await fetch(`${API}/api/room/target`);
+    const d = await r.json();
+    const input = document.getElementById('room-target-input');
+    const forceInput = document.getElementById('room-force-input');
+    if (document.activeElement !== input) {
+      input.value = d.target_count || 1;
+    }
+    forceInput.checked = !!d.force_target;
+    setForceAppliedLabel(!!d.force_target);
+    document.getElementById('room-target-status').textContent = `Target: ${d.target_count || 1} · Estimated: ${d.estimated_count ?? 0} · Force: ${d.force_target ? 'ON' : 'OFF'}`;
+    const state = d.room_state || {};
+    document.getElementById('room-estimate-line').textContent = `Room state: ${state.occupancy_state || 'unknown'} · ${state.activity_hint || 'idle'}`;
+    const base = d.baseline || {};
+    updateBaselineStatus(base);
+  }catch(_e){}
+}
+
+function updateBaselineStatus(base){
+  const el = document.getElementById('baseline-status');
+  if(!el) return;
+  if(!base || !base.ready){
+    el.textContent = 'Baseline: not set';
+    el.style.color = 'var(--muted)';
+    return;
+  }
+  const db = Number(base.current_distance_db || 0).toFixed(1);
+  const conf = Math.round((base.comparison_confidence || 0) * 100);
+  el.textContent = `Baseline: ready · ΔRSSI ${db} dB · conf ${conf}%`;
+  if((base.comparison_confidence || 0) >= 0.35 && (base.current_distance_db || 0) < 2.0){
+    el.style.color = 'var(--green)';
+  } else if((base.current_distance_db || 0) < 5.0){
+    el.style.color = 'var(--amber)';
+  } else {
+    el.style.color = 'var(--red)';
+  }
+}
+
+async function loadBaselineStatus(){
+  try{
+    const r = await fetch(`${API}/api/room/baseline`);
+    const d = await r.json();
+    updateBaselineStatus(d);
+  }catch(_e){}
+}
+
+async function captureEmptyBaseline(){
+  const status = document.getElementById('baseline-status');
+  if(status) status.textContent = 'Baseline: capturing... keep room empty for 2s';
+  try{
+    const r = await fetch(`${API}/api/room/baseline/capture`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({confirm_empty:true, scans:8}),
+    });
+    const d = await r.json();
+    updateBaselineStatus(d.baseline || {});
+    const ok = !!d.ok;
+    document.getElementById('room-target-status').textContent = ok
+      ? `Empty-room baseline captured (${d.baseline?.baseline_ap_count || 0} APs)`
+      : 'Baseline capture failed';
+  }catch(_e){
+    document.getElementById('room-target-status').textContent = 'Baseline capture failed';
+  }
+}
+
+async function clearEmptyBaseline(){
+  try{
+    const r = await fetch(`${API}/api/room/baseline`, {method:'DELETE'});
+    const d = await r.json();
+    updateBaselineStatus((d||{}).baseline || {});
+    document.getElementById('room-target-status').textContent = 'Empty-room baseline cleared';
+  }catch(_e){
+    document.getElementById('room-target-status').textContent = 'Failed to clear baseline';
+  }
+}
+
+function renderStrictButton(strict){
+  const btn = document.getElementById('strict-toggle-btn');
+  const note = document.getElementById('strict-mode-note');
+  btn.textContent = strict ? 'STRICT: ON' : 'STRICT: OFF';
+  btn.style.borderColor = strict ? 'var(--amber)' : 'var(--green)';
+  btn.style.color = strict ? 'var(--amber)' : 'var(--green)';
+  note.textContent = strict ? 'Core simulated sensors are off' : 'Mixed mode uses simulated core sensors';
+}
+
+async function toggleStrictMode(){
+  const current = document.getElementById('strict-toggle-btn').textContent.includes('ON');
+  const strict = !current;
+  try{
+    const r = await fetch(`${API}/api/mode`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({strict_real_mode: strict}),
+    });
+    const d = await r.json();
+    renderStrictButton(!!d.strict_real_mode);
+    const badge = document.getElementById('strict-badge');
+    badge.textContent = d.strict_real_mode ? 'MODE: STRICT REAL' : 'MODE: MIXED';
+    badge.className = `badge ${d.strict_real_mode ? 'green' : 'amber'}`;
+    document.getElementById('room-target-status').textContent = `Mode applied: ${d.strict_real_mode ? 'STRICT REAL' : 'MIXED'}`;
+  }catch(_e){
+    document.getElementById('room-target-status').textContent = 'Failed to apply mode';
+  }
+}
+
+async function loadStrictMode(){
+  try{
+    const r = await fetch(`${API}/api/mode`);
+    const d = await r.json();
+    const strict = !!d.strict_real_mode;
+    const badge = document.getElementById('strict-badge');
+    badge.textContent = strict ? 'MODE: STRICT REAL' : 'MODE: MIXED';
+    badge.className = `badge ${strict ? 'green' : 'amber'}`;
+    renderStrictButton(strict);
+  }catch(_e){}
+}
+
+async function setRoomTarget(){
+  const input = document.getElementById('room-target-input');
+  const forceInput = document.getElementById('room-force-input');
+  const count = Math.max(1, Math.min(10, parseInt(input.value || '1', 10)));
+  const forceTarget = !!forceInput.checked;
+  try{
+    const r = await fetch(`${API}/api/room/target`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({count, force_target: forceTarget}),
+    });
+    const d = await r.json();
+    input.value = d.target_count;
+    forceInput.checked = !!d.force_target;
+    setForceAppliedLabel(!!d.force_target);
+    document.getElementById('room-target-status').textContent = `Target: ${d.target_count} set · Force: ${d.force_target ? 'ON' : 'OFF'}`;
+  }catch(_e){
+    document.getElementById('room-target-status').textContent = 'Failed to set room target';
+  }
+}
+
+// Fallback: poll snapshot API so dashboard still works even when WS is blocked.
+async function startSnapshotFallback(){
+  if(pollFallbackStarted) return;
+  pollFallbackStarted = true;
+  setFrontendStatus('WebSocket not yielding data. Using HTTP snapshot fallback...', 'warn');
+  setInterval(async()=>{
+    try{
+      const r = await fetch(`${API}/api/snapshot`, { cache: 'no-store' });
+      if(!r.ok) return;
+      const d = await r.json();
+      latestData = d;
+      fpsCounter++;
+      updateDash(d);
+      if(!hasSeenWsPayload){
+        setFrontendStatus('HTTP fallback active. Dashboard data is updating.', 'ok');
+      }
+    }catch(_e){
+      setFrontendStatus('Fallback polling failed. Check backend reachability.', 'err');
+    }
+  }, 1000);
+}
+
+// Start fallback if no WS payload arrives within 4 seconds.
+setTimeout(()=>{
+  if(!hasSeenWsPayload) startSnapshotFallback();
+}, 4000);
+
+// ── Dashboard update ─────────────────────────────────────────────────────
+function updateDash(d){
+  const act=d.activity||'idle', col=ACT_COLORS[act]||'#8496b4';
+  const actEl=document.getElementById('act-label');
+  if(curActivity!==act){ curActivity=act; actEl.style.animation='none'; actEl.offsetHeight; actEl.style.animation='fadeInUp .35s ease'; }
+  actEl.textContent=act.replace('_',' ').toUpperCase(); actEl.style.color=col;
+  document.getElementById('cbar-fill').style.cssText=`width:${(d.confidence||0)*100}%;background:${col}`;
+  document.getElementById('act-sub').textContent=`${ACT_ICONS[act]||'◆'} Conf ${Math.round((d.confidence||0)*100)}% · Score ${Math.round(d.fused_score||0)}`;
+  document.getElementById('conf-pct').textContent=Math.round((d.confidence||0)*100)+'%';
+  document.getElementById('s-fused').textContent=Math.round(d.fused_score||0);
+  document.getElementById('s-wifi').textContent=d.sensors?.wifi?.n_networks||0;
+  const room = d.room_state || {};
+  const exactCount = room.person_count ?? d.person_count ?? 0;
+  const estCount = room.estimated_count ?? d.person_count ?? 0;
+  const occBandRaw = room.occupancy_band || (estCount <= 0 ? '0' : estCount <= 2 ? '1-2' : '3+');
+  const occBand = occBandRaw;
+  const exactBand = exactCount >= 3 ? '4+' : String(exactCount);
+  const estimateBand = estCount >= 3 ? '4+' : String(estCount);
+  const trackedPhoneCount = room.tracked_phone_count ?? ((d.sensor_sources||{}).phone_count || 0);
+  const exactCountLabel = exactCount >= 3 ? '4+ exact persons' : `${exactCount} exact person${exactCount === 1 ? '' : 's'}`;
+  const estCountLabel = estCount >= 3 ? '4+ persons estimated' : `${estCount} person${estCount === 1 ? '' : 's'} estimated`;
+  const exactCountEl = document.getElementById('room-exact-count');
+  if (exactCountEl) exactCountEl.textContent = `Exact: ${exactCountLabel}`;
+  const estimateCountEl = document.getElementById('room-estimate-count');
+  if (estimateCountEl) estimateCountEl.textContent = `Estimate: ${estCountLabel}`;
+  document.getElementById('s-persons').textContent=estimateBand;
+  document.getElementById('person-count').textContent=exactBand;
+  // Person source label
+  const phoneCt = trackedPhoneCount;
+  const inferredCt = (d.persons||[]).filter(p=>p.type==='inferred').length;
+  const srcEl = document.getElementById('person-source-lbl');
+  if(srcEl){
+    const sourceHint = phoneCt > 0
+      ? `${phoneCt} phone stream${phoneCt>1?'s':''}${inferredCt>0 ? ` + ${inferredCt} WiFi inferred` : ''}`
+      : (inferredCt > 0 ? `${inferredCt} WiFi inferred` : 'No phones connected');
+    srcEl.textContent = `Exact: ${exactBand} · Estimate: ${estimateBand} · ${sourceHint}`;
+  }
+
+  const stabilizedPersons = smoothPersons(d.persons || []);
+  persons = stabilizedPersons;
+  updatePersonIcons(stabilizedPersons);
+  updatePersonsDetail(stabilizedPersons);
+
+  const physio=d.physio||{};
+  setM('m-gait','mb-gait',physio.gait_score,100);   setM('m-rom','mb-rom',physio.rom_score,100);
+  setM('m-sym','mb-sym',physio.symmetry_score,100);  setM('m-cad','mb-cad',physio.step_cadence,200);
+  setM('m-fat','mb-fat',physio.fatigue_index,100);   setM('m-rep','mb-rep',physio.rep_count,20);
+  const fr=Math.round(physio.fall_risk||0);
+  document.getElementById('m-fall').textContent=fr;
+  const ring=document.getElementById('fall-ring');
+  if(fr>60){ ring.style.borderColor='var(--red)';ring.style.color='var(--red)'; document.getElementById('fall-desc').textContent='High risk!'; }
+  else if(fr>35){ ring.style.borderColor='var(--amber)';ring.style.color='var(--amber)'; document.getElementById('fall-desc').textContent='Moderate caution'; }
+  else{ ring.style.borderColor='var(--green)';ring.style.color='var(--green)'; document.getElementById('fall-desc').textContent='Low risk'; }
+
+  const ss=d.sensor_scores||{};
+  setSS('wifi',ss.wifi||0); setSS('bt',ss.bluetooth||0); setSS('imu',ss.imu||0);
+  setSS('ac',ss.acoustic||0); setSS('rf',ss.ambient_rf||0);
+  document.getElementById('wifi-count').textContent=`WiFi: ${d.sensors?.wifi?.n_networks||0} APs`;
+
+  // WiFi networks
+  updateWifiList(d.wifi_networks);
+
+  // Phone IMU
+  // ── Multi-device phone status ─────────────────────────────────────────────
+  const phoneCount = d.sensor_sources?.phone_count || 0;
+  const phoneBadge = document.getElementById('phone-badge');
+  phoneBadge.style.display = phoneCount > 0 ? 'inline-flex' : 'none';
+  const phoneStatusEl = document.getElementById('phone-status-lbl');
+  if (phoneCount > 0) {
+    phoneStatusEl.textContent = `— ${phoneCount} device${phoneCount>1?'s':''} live`;
+    phoneStatusEl.style.color = 'var(--green)';
+  } else {
+    phoneStatusEl.textContent = '— none connected';
+    phoneStatusEl.style.color = 'var(--dim)';
+  }
+  // Update connected devices list
+  updatePhoneDevicesList(stabilizedPersons);
+
+  // Update first-person IMU readouts
+  const firstPhone = (d.persons||[]).find(p=>p.type==='phone');
+  if(firstPhone){
+    document.getElementById('phone-accel').textContent=(firstPhone.accel_rms||0).toFixed(3);
+    document.getElementById('phone-gyro').textContent=(firstPhone.gyro_rms||0).toFixed(3);
+    document.getElementById('phone-jerk').textContent=(firstPhone.jerk||0).toFixed(4);
+    document.getElementById('imu-badge').textContent = firstPhone.source==='simulated'?`SIM ${firstPhone.activity||''}`.trim():'REAL';
+  } else {
+    const imu=d.sensors?.imu||{};
+    document.getElementById('phone-accel').textContent=(imu.accel_rms||0).toFixed(3);
+    document.getElementById('phone-gyro').textContent=(imu.gyro_rms||0).toFixed(3);
+    document.getElementById('phone-jerk').textContent=(imu.jerk||0).toFixed(3);
+    document.getElementById('imu-badge').textContent = 'SIM';
+  }
+
+  const sources = d.sensor_sources || {};
+  const sourceBits = [];
+  sourceBits.push(sources.wifi_real ? 'WiFi real' : 'WiFi simulated');
+  sourceBits.push(phoneCount > 0 ? `${phoneCount} phone(s) live` : 'No phones');
+  sourceBits.push(sources.simulated_core ? 'Core sensors simulated' : 'Core sensors real');
+  const strictBadge = document.getElementById('strict-badge');
+  strictBadge.textContent = sources.strict_real_mode ? 'MODE: STRICT REAL' : 'MODE: MIXED';
+  strictBadge.className = `badge ${sources.strict_real_mode ? 'green' : 'amber'}`;
+  renderStrictButton(!!sources.strict_real_mode);
+  if (hasSeenWsPayload) {
+    setFrontendStatus(`Live stream active. ${sourceBits.join(' · ')}`, 'ok');
+  }
+
+  if (room.target_count) {
+    const input = document.getElementById('room-target-input');
+    if (document.activeElement !== input) {
+      input.value = room.target_count;
+    }
+    setForceAppliedLabel(!!room.force_target);
+    document.getElementById('room-target-status').textContent =
+      `Target: ${room.target_count} · Exact: ${exactBand} · Estimate: ${estimateBand} · Phones: ${room.tracked_phone_count ?? 0} · ${room.occupancy_state || 'unknown'} · Force: ${room.force_target ? 'ON' : 'OFF'}`;
+    const estimateLine = document.getElementById('room-estimate-line');
+    if(estimateLine) estimateLine.textContent =
+      `Room motion: ${Math.round(room.room_motion_score || 0)}/100 · Baseline Δ ${Number(room.baseline_distance_db || 0).toFixed(1)} dB · ${room.activity_hint || room.dominant_activity || 'idle'}`;
+    updateBaselineStatus({
+      ready: !!room.baseline_ready,
+      current_distance_db: room.baseline_distance_db || 0,
+      comparison_confidence: room.baseline_confidence || 0,
+    });
+  }
+
+  // Fusion chart
+  fusHistory.push(d.fused_score||0); fusHistory.shift();
+  if (typeof fusionChart !== 'undefined' && fusionChart?.data?.datasets?.[0]) {
+    fusionChart.data.datasets[0].data=[...fusHistory];
+    fusionChart.update('none');
+  }
+
+  // ML probabilities
+  if(d.ml_probabilities && Object.keys(d.ml_probabilities).length) {
+    updateMLProbs(d.ml_probabilities);
+  }
+  // ML badge
+  if(d.model_info && !mlInfoLoaded){
+    mlInfoLoaded=true;
+    const mi=d.model_info;
+    document.getElementById('ml-badge').textContent=mi.trained?`ML: ${Math.round((mi.accuracy||0)*100)}% acc`:'ML: rule-based';
+    document.getElementById('ml-model-name').textContent=mi.model||'rule-based';
+    document.getElementById('ml-acc-lbl').textContent=mi.trained?`acc ${(mi.accuracy||0).toFixed(3)}`:'heuristic';
+  }
+
+}
+
+function setM(id,bid,v,max){
+  const val=v||0;
+  document.getElementById(id).textContent=Math.round(val);
+  document.getElementById(bid).style.width=Math.min(100,(val/max)*100)+'%';
+}
+function setSS(k,s){
+  const f=document.getElementById(`sfill-${k}`),sc=document.getElementById(`ss-${k}`);
+  if(f)f.style.width=Math.min(100,s)+'%'; if(sc)sc.textContent=Math.round(s);
+}
+
+function colorForPerson(person, idx){
+  if(person?.device_id){
+    let h = 0;
+    for(let i=0;i<person.device_id.length;i++) h = (h * 31 + person.device_id.charCodeAt(i)) >>> 0;
+    return PERSON_COLORS[h % PERSON_COLORS.length];
+  }
+  return PERSON_COLORS[idx % PERSON_COLORS.length];
+}
+
+function poseGlyph(activity){
+  return {idle:'◌', walk:'↗', squat:'∩', bend:'↘', lift:'⇑', fall_risk:'⚑'}[activity] || '◌';
+}
+
+function smoothPersons(nextPersons){
+  const out = [];
+  for(let i=0;i<(nextPersons||[]).length;i++){
+    const p = nextPersons[i] || {};
+    const key = p.device_id || `p-${i}`;
+    const prev = renderPersonState.get(key) || p;
+    const alpha = 0.22;
+    const smoothed = {
+      ...p,
+      x: (prev.x ?? p.x ?? 0.5) + ((p.x ?? 0.5) - (prev.x ?? p.x ?? 0.5)) * alpha,
+      y: (prev.y ?? p.y ?? 0.5) + ((p.y ?? 0.5) - (prev.y ?? p.y ?? 0.5)) * alpha,
+      confidence: (prev.confidence ?? p.confidence ?? 0.5) + ((p.confidence ?? 0.5) - (prev.confidence ?? p.confidence ?? 0.5)) * 0.18,
+      accel_rms: (prev.accel_rms ?? p.accel_rms ?? 0) + ((p.accel_rms ?? 0) - (prev.accel_rms ?? p.accel_rms ?? 0)) * 0.2,
+      jerk: (prev.jerk ?? p.jerk ?? 0) + ((p.jerk ?? 0) - (prev.jerk ?? p.jerk ?? 0)) * 0.2,
+      activity: p.activity || prev.activity || 'idle',
+    };
+    renderPersonState.set(key, smoothed);
+    out.push(smoothed);
+  }
+  return out;
+}
+
+function updatePersonIcons(personList){
+  const el=document.getElementById('person-icons');
+  el.innerHTML='';
+  const list = Array.isArray(personList) && personList.length ? personList : [];
+  if(!list.length){
+    el.innerHTML='<div style="font-family:var(--mono);font-size:9px;color:var(--dim)">No people detected</div>';
+    return;
+  }
+  list.forEach((person, idx)=>{
+    const col = colorForPerson(person, idx);
+    const isInferred = person.type === 'inferred';
+    const act = isInferred ? 'UNKNOWN' : (person.activity||'idle').replace('_',' ').toUpperCase();
+    const glyph = isInferred ? '?' : poseGlyph(person.activity);
+    const conf = Math.round((person.confidence||0)*100);
+    const node = document.createElement('div');
+    node.className = 'avatar-card';
+    node.innerHTML = `
+      <div class="avatar-top">
+        <div class="avatar-badge" style="background:${isInferred ? '#94a3b8' : col}">${glyph}</div>
+        <div class="avatar-name">${isInferred ? 'wifi inferred' : (person.device_id||`P${idx+1}`).replace(/^phone_/,'').slice(0,14)}</div>
+      </div>
+      <div>
+        <div class="avatar-act" style="color:${isInferred ? '#94a3b8' : (ACT_COLORS[person.activity]||col)}">${act}</div>
+        <div class="avatar-meta">${isInferred ? 'Occupancy from WiFi RSSI dynamics' : `${(person.accel_rms||0).toFixed(2)} accel · ${Math.round(person.step_cadence||0)} spm · ${conf}% conf`}</div>
+      </div>
+      <div class="avatar-strip"><div style="width:${Math.min(100, Math.max(6, conf))}%;background:${isInferred ? '#94a3b8' : col}"></div></div>
+    `;
+    el.appendChild(node);
+  });
+}
+
+function updatePersonsDetail(persons){
+  const el = document.getElementById('persons-detail');
+  if(!el) return;
+  if(!persons || !persons.length){ el.innerHTML=''; return; }
+
+  el.innerHTML = persons.map((p,i)=>{
+    const col = colorForPerson(p, i);
+    const actCol = ACT_COLORS[p.activity]||'#8496b4';
+    const fr = p.fall_risk||0;
+    const frCol = fr>60?'var(--red)':fr>30?'var(--amber)':'var(--green)';
+    const srcBadge = p.source==='wifi_inferred'
+      ? `<span style="font-size:8px;color:var(--muted);background:rgba(132,150,180,.12);padding:1px 5px;border-radius:3px">WiFi inferred</span>`
+      : p.source==='simulated'
+        ? `<span style="font-size:8px;color:var(--amber);background:rgba(255,182,39,.1);padding:1px 5px;border-radius:3px">SIM</span>`
+        : `<span style="font-size:8px;color:var(--green);background:rgba(0,255,157,.1);padding:1px 5px;border-radius:3px">REAL</span>`;
+    const isInferred = p.type === 'inferred';
+    const idLabel = isInferred ? '?' : (p.device_id || `phone_${i+1}`).replace(/^phone_/, '');
+    return `<div style="background:var(--bg3,#0c1018);border:1px solid var(--border,#1a2235);border-left:2px solid ${col};
+      border-radius:6px;padding:6px 10px;font-family:var(--mono);font-size:9px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+        <span style="color:${col};font-weight:700">P${i+1}</span>
+        <span style="color:var(--muted);font-size:8px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${idLabel}</span>
+        ${srcBadge}
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <span>Act: <span style="color:${actCol}">${(p.activity||'idle').replace('_',' ').toUpperCase()}</span></span>
+        <span>Fall: <span style="color:${frCol}">${Math.round(fr)}%</span></span>
+        <span style="color:var(--dim)">Accel:${(p.accel_rms||0).toFixed(2)} Jerk:${(p.jerk||0).toFixed(3)}</span>
+        <span style="color:var(--dim)">Cad:${Math.round(p.step_cadence||0)}spm</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updatePhoneDevicesList(persons){
+  const el = document.getElementById('phone-devices-list');
+  if(!el) return;
+  const phonePersons = (persons||[]).filter(p=>p.type==='phone');
+  if(!phonePersons.length){
+    el.innerHTML='<div style="font-family:var(--mono);font-size:9px;color:var(--dim)">No phones connected — open /phone on each device</div>';
+    return;
+  }
+  el.innerHTML = phonePersons.map((p,i)=>{
+    const col = colorForPerson(p, i);
+    const actCol = ACT_COLORS[p.activity]||'#8496b4';
+    const fr = p.fall_risk||0;
+    const frCol = fr>60?'var(--red)':fr>30?'var(--amber)':'var(--green)';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;
+      background:rgba(0,0,0,.2);border-radius:5px;font-family:var(--mono);font-size:9px">
+      <span style="color:${col};font-weight:700">P${i+1}</span>
+      <span style="color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.device_id||'?'}</span>
+      <span style="color:${actCol}">${(p.activity||'idle').replace('_',' ')}</span>
+      <span style="color:${frCol}">⚠${Math.round(fr)}%</span>
+    </div>`;
+  }).join('');
+}
+
+function updateWifiList(networks){
+  const el=document.getElementById('wifi-list');
+  if(!networks||!networks.length){
+    el.innerHTML='<div style="font-family:var(--mono);font-size:9px;color:var(--dim)">Scanning...</div>';
+    document.getElementById('wifi-status').textContent='No access points reported yet.';
+    document.getElementById('wifi-ap-count').textContent='(0)';
+    return;
+  }
+  document.getElementById('wifi-ap-count').textContent=`(${networks.length})`;
+  const strongest = networks[0] || {};
+  const strongestName = strongest.ssid || strongest.bssid || 'unknown';
+  const strongestRssi = Math.round(typeof strongest.rssi === 'number' ? strongest.rssi : -100);
+  document.getElementById('wifi-status').textContent = `WiFi available: ${networks.length} APs. Strongest: ${strongestName} (${strongestRssi} dBm)`;
+  el.innerHTML=networks.slice(0,12).map(n=>{
+    const rssi=n.rssi||n.signal_pct||-80;
+    const bars=Math.max(1,Math.min(5,Math.round((rssi+100)/14)));
+    const pct=Math.max(0,Math.min(100,Math.round((rssi+100)*2)));
+    const bh=Array.from({length:5},(_,i)=>`<div class="wbseg" style="height:${(i+1)*3+2}px${i<bars?';background:var(--cyan)':''}">&nbsp;</div>`).join('');
+    const ssid=(n.ssid||n.bssid||'?').substring(0,16);
+    const security=n.ssid&&n.ssid!=='?'?'':'?';
+    return `<div class="wnet">
+      <div class="wssid" title="${n.ssid||n.bssid}">${ssid}</div>
+      <div class="wbars">${bh}</div>
+      <div class="wrssi">${Math.round(typeof rssi==='number'?rssi:-80)}dBm</div>
+    </div>`;
+  }).join('');
+}
+
+function updateMLProbs(probs){
+  const el=document.getElementById('ml-probs');
+  const sorted=Object.entries(probs).sort((a,b)=>b[1]-a[1]);
+  el.innerHTML=sorted.map(([act,p])=>{
+    const pct=Math.round(p*100), col=ML_PROB_COLS[act]||'#8496b4';
+    return `<div class="ml-prob-row">
+      <div class="ml-prob-label">${act.replace('_',' ')}</div>
+      <div class="ml-prob-bar"><div class="ml-prob-fill" style="width:${pct}%;background:${col}"></div></div>
+      <div class="ml-prob-val" style="color:${col}">${pct}%</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Silhouette ────────────────────────────────────────────────────────────
+const silCanvas=document.getElementById('silCanvas');
+const silCtx=silCanvas.getContext('2d');
+
+function lerp(a,b,t){return a+(b-a)*t;}
+function hexRgba(hex,a){
+  const m=hex.match(/^#?(..)(..)(..)$/);
+  if(!m)return `rgba(0,229,255,${a})`;
+  return `rgba(${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)},${a})`;
+}
+function resizeSil(){silCanvas.width=silCanvas.parentElement.clientWidth;silCanvas.height=silCanvas.parentElement.clientHeight;}
+window.addEventListener('resize',resizeSil); setTimeout(resizeSil,100);
+
+function drawSilhouette(act,d){
+  const W=silCanvas.width,H=silCanvas.height;
+  silCtx.clearRect(0,0,W,H);
+  const col=ACT_COLORS[act]||'#8496b4';
+  const target=POSES[act]||POSES.idle;
+  Object.keys(target).forEach(k=>{silPose[k]=lerp(silPose[k]??0,target[k],.07);});
+  silPhase+=.05;
+  const bob=Math.sin(silPhase)*(silPose.headBob||0)*.5;
+  const sway=Math.sin(silPhase*.7)*(silPose.torsoSway||0)*1.5;
+  const fused=d?.fused_score||0, nNets=d?.sensors?.wifi?.n_networks||0;
+
+  // Grid
+  silCtx.strokeStyle='rgba(26,34,53,.4)';silCtx.lineWidth=.5;
+  for(let x=0;x<W;x+=40){silCtx.beginPath();silCtx.moveTo(x,0);silCtx.lineTo(x,H);silCtx.stroke();}
+  for(let y=0;y<H;y+=40){silCtx.beginPath();silCtx.moveTo(0,y);silCtx.lineTo(W,y);silCtx.stroke();}
+
+  // WiFi rings
+  const ra=Math.min(.2,fused/450);
+  for(let i=0;i<Math.min(nNets,6);i++){
+    const r=52+i*25+Math.sin(silPhase+i*.8)*6;
+    silCtx.beginPath();silCtx.arc(W/2+sway,H*.44+bob,r,0,Math.PI*2);
+    silCtx.strokeStyle=hexRgba(col,ra*(1-i/6));silCtx.lineWidth=1;silCtx.stroke();
+  }
+
+  const pc=d?.person_count||0;
+  const PCOLS=['#00e5ff','#b57aff','#ffb627','#ff9de2','#7affb0'];
+  const labelAnchors = [];
+  for(let pi=0;pi<pc;pi++){
+    const p=(d?.persons&&d.persons[pi])||{x:.5,y:.5,id:pi,activity:'idle'};
+    const pCol=PCOLS[pi%PCOLS.length];
+
+    // ── Per-person pose: lerp toward THIS person's own activity ──────────────
+    const ps = getPersonPose(pi);
+    const pAct = p.activity || 'idle';
+    const targetPose = POSES[pAct] || POSES.idle;
+    // Lerp speed: faster for more active persons (accel_rms-driven)
+    const lerpSpeed = 0.04 + Math.min(0.06, (p.accel_rms||0) * 0.04);
+    Object.keys(targetPose).forEach(k => {
+      ps[k] = (ps[k]??0) + (targetPose[k] - (ps[k]??0)) * lerpSpeed;
+    });
+    // Phase: speed scales with accel so active person animates faster
+    ps.phase += 0.028 + Math.min(0.06, (p.accel_rms||0) * 0.03);
+
+    // ── Scale & alpha ─────────────────────────────────────────────────────────
+    const isMain = pi === 0;
+    const scale = isMain ? 1.0 : 0.78;   // secondary slightly smaller, not tiny
+    const alpha = isMain ? 1.0 : 0.75;
+
+    // ── Signal-strength orbit radius ──────────────────────────────────────────
+    // Higher accel = person moves more = larger orbit around their anchor point
+    const motionLevel = Math.min(1.0, (p.accel_rms||0) / 1.5);
+    const orbitR = 1.5 + motionLevel * 4;  // px, reduced to avoid jitter
+    const orbitX = p.x*W + Math.cos(ps.phase * 0.6) * orbitR;
+    const orbitY = p.y*H*.83+H*.07 + Math.sin(ps.phase * 0.45) * orbitR * 0.5;
+
+    drawPerson(orbitX, orbitY, scale, pCol, alpha, ps, ps.phase);
+
+    // ── Labels ────────────────────────────────────────────────────────────────
+    const isInferred = p.type === 'inferred';
+    const lbl = isInferred ? '?' : (p.device_id ? p.device_id.replace(/^phone_/,'').slice(0,8) : `P${pi+1}`);
+    const actLbl = isInferred ? 'UNKNOWN' : pAct.replace('_',' ').toUpperCase();
+    const frHigh = (p.fall_risk||0) > 55;
+
+    // Name
+    let labelY = orbitY - 104*scale - 10;
+    for(let li=0;li<labelAnchors.length;li++){
+      const prev = labelAnchors[li];
+      const dx = Math.abs(prev.x - orbitX);
+      const dy = Math.abs(prev.y - labelY);
+      if(dx < 58 && dy < 14){
+        labelY -= (14 - dy);
+      }
+    }
+    labelAnchors.push({x: orbitX, y: labelY});
+
+    silCtx.fillStyle = isInferred ? 'rgba(148,163,184,.95)' : (frHigh ? 'rgba(255,61,90,.95)' : hexRgba(pCol, .9));
+    silCtx.font = `700 ${isMain?10:9}px "IBM Plex Mono"`;
+    silCtx.textAlign = 'center';
+    silCtx.fillText(lbl, orbitX, labelY);
+
+    // Activity in its own colour
+    silCtx.fillStyle = isInferred ? '#94a3b8' : (ACT_COLORS[pAct] || '#8496b4');
+    silCtx.font = `600 ${isMain?9:8}px "IBM Plex Mono"`;
+    silCtx.fillText(actLbl, orbitX, labelY + 9);
+
+    // Motion indicator dot — brighter when more active
+    const dotR = 3 + motionLevel * 4;
+    silCtx.beginPath();
+    silCtx.arc(orbitX + 22*scale, orbitY - 104*scale, dotR, 0, Math.PI*2);
+    silCtx.fillStyle = hexRgba(pCol, 0.3 + motionLevel * 0.6);
+    silCtx.fill();
+
+    // Fall warning
+    if(frHigh){
+      silCtx.font='700 8px "IBM Plex Mono"';
+      silCtx.fillStyle='rgba(255,61,90,.95)';
+      silCtx.fillText('⚠ FALL', orbitX, orbitY + 60*scale + 18);
+    }
+  }
+
+  // ── Room-wide dominant activity label at bottom ───────────────────────────
+  if(d){
+    const mp=(d.persons&&d.persons[0])||{x:.5,y:.5};
+    const mx=mp.x*W, my=mp.y*H*.83+H*.07;
+    const ss=d.sensor_scores||{};
+    const sKeys=['wifi','bluetooth','imu','acoustic','ambient_rf'];
+    const sCols=['#00e5ff','#b57aff','#00ff9d','#ffb627','#ff3d5a'];
+    sKeys.forEach((k,i)=>{
+      const angle=(i/sKeys.length)*Math.PI*2-Math.PI/2;
+      const dist=115,ex=mx+Math.cos(angle)*dist,ey=my+Math.sin(angle)*dist;
+      const score=(ss[k]||0)/100;
+      silCtx.beginPath();silCtx.moveTo(mx,my);silCtx.lineTo(ex,ey);
+      silCtx.strokeStyle=hexRgba(sCols[i],.06+score*.18);
+      silCtx.lineWidth=.6+score*1.4;silCtx.setLineDash([3,5]);silCtx.stroke();silCtx.setLineDash([]);
+      silCtx.beginPath();silCtx.arc(ex,ey,3+score*4,0,Math.PI*2);
+      silCtx.fillStyle=hexRgba(sCols[i],.08+score*.16);silCtx.fill();
+      silCtx.strokeStyle=hexRgba(sCols[i],.25+score*.35);silCtx.lineWidth=1;silCtx.stroke();
+    });
+    silCtx.fillStyle=hexRgba(ACT_COLORS[act]||col,.8);
+    silCtx.font='700 9px "IBM Plex Mono"';silCtx.textAlign='center';
+    silCtx.fillText('ROOM: '+act.replace('_',' ').toUpperCase(), W/2, H-8);
+  }
+}
+
+function drawPerson(cx,cy,s,col,alpha,pose,ph){
+  silCtx.save();silCtx.translate(cx,cy);silCtx.globalAlpha=alpha;
+  if(alpha>.7){
+    const g=silCtx.createRadialGradient(0,-52*s,0,0,-52*s,80*s);
+    g.addColorStop(0,hexRgba(col,.06));g.addColorStop(1,'transparent');
+    silCtx.fillStyle=g;silCtx.beginPath();silCtx.arc(0,-52*s,80*s,0,Math.PI*2);silCtx.fill();
+  }
+  const lean=(pose.torsoLean||0)*Math.PI/180;
+  const armOsc=Math.sin(ph)*.5,legOsc=Math.sin(ph)*.5;
+  silCtx.beginPath();silCtx.arc(0,-104*s,18*s,0,Math.PI*2);
+  silCtx.fillStyle=hexRgba(col,.9);silCtx.fill();
+  silCtx.save();silCtx.rotate(lean);
+  silCtx.beginPath();silCtx.moveTo(0,-86*s);silCtx.lineTo(0,-19*s);
+  silCtx.strokeStyle=hexRgba(col,.82);silCtx.lineWidth=6.5*s;silCtx.lineCap='round';silCtx.stroke();
+  drawLimb(silCtx,0,-70*s,40*s,((pose.armL||0)+armOsc*20)*Math.PI/180,col,4.5*s);
+  drawLimb(silCtx,0,-70*s,40*s,((pose.armR||0)-armOsc*20)*Math.PI/180,col,4.5*s);
+  silCtx.restore();
+  drawLimb(silCtx,0,-19*s,50*s,((pose.legL||0)+legOsc*13)*Math.PI/180,col,5.5*s);
+  drawLimb(silCtx,0,-19*s,50*s,((pose.legR||0)-legOsc*13)*Math.PI/180,col,5.5*s);
+  silCtx.restore();
+}
+function drawLimb(ctx,sx,sy,len,ang,col,w){
+  ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(sx+Math.sin(ang)*len,sy+Math.cos(ang)*len);
+  ctx.strokeStyle=hexRgba(col,.78);ctx.lineWidth=w;ctx.lineCap='round';ctx.stroke();
+}
+(function loop(){ drawSilhouette(curActivity,latestData); requestAnimationFrame(loop); })();
+
+// ── Radar ─────────────────────────────────────────────────────────────────
+const rCanvas=document.getElementById('radarCanvas'),rCtx=rCanvas.getContext('2d');
+function drawRadar(){
+  const W=rCanvas.width=rCanvas.parentElement.clientWidth,H=rCanvas.height=rCanvas.parentElement.clientHeight;
+  rCtx.clearRect(0,0,W,H);
+  rCtx.strokeStyle='rgba(26,34,53,.8)';rCtx.lineWidth=.5;
+  for(let i=1;i<4;i++){rCtx.beginPath();rCtx.arc(W/2,H/2,i*Math.min(W,H)*.13,0,Math.PI*2);rCtx.stroke();}
+  rCtx.beginPath();rCtx.moveTo(W/2,0);rCtx.lineTo(W/2,H);rCtx.stroke();
+  rCtx.beginPath();rCtx.moveTo(0,H/2);rCtx.lineTo(W,H/2);rCtx.stroke();
+  const RADAR_COLS=['0,229,255','181,122,255','255,182,39','255,157,226','122,255,176'];
+  persons.forEach((p,i)=>{
+    const px=p.x*W,py=p.y*H;
+    const c=RADAR_COLS[i%RADAR_COLS.length];
+    const conf=p.confidence||.5;
+    const t=(Date.now()%2000)/2000,pr=10+t*18;
+    // Pulse ring
+    rCtx.beginPath();rCtx.arc(px,py,pr,0,Math.PI*2);
+    rCtx.strokeStyle=`rgba(${c},${(1-t)*.22})`;rCtx.lineWidth=1;rCtx.stroke();
+    // Fill dot
+    rCtx.beginPath();rCtx.arc(px,py,7*conf,0,Math.PI*2);
+    rCtx.fillStyle=`rgba(${c},${.2+conf*.25})`;rCtx.fill();
+    // Solid centre
+    rCtx.beginPath();rCtx.arc(px,py,3.5,0,Math.PI*2);
+    rCtx.fillStyle=`rgb(${c})`;rCtx.fill();
+    // Fall risk ring
+    if((p.fall_risk||0)>55){
+      rCtx.beginPath();rCtx.arc(px,py,11,0,Math.PI*2);
+      rCtx.strokeStyle='rgba(255,61,90,.7)';rCtx.lineWidth=2;rCtx.stroke();
+    }
+    // Label
+    const devShort = p.device_id ? p.device_id.replace(/^phone_/,'').slice(0,6) : `P${i+1}`;
+    rCtx.fillStyle=`rgba(${c},.9)`;rCtx.font=`700 7px "IBM Plex Mono"`;rCtx.textAlign='center';
+    rCtx.fillText(devShort,px,py-13);
+    const actLbl=(p.activity||'').replace('_',' ');
+    rCtx.fillStyle=(ACT_COLORS[p.activity]||`rgba(${c},.6)`);rCtx.font=`600 6px "IBM Plex Mono"`;
+    rCtx.fillText(actLbl,px,py-5);
+  });
+}
+setInterval(drawRadar,120);
+
+// ── Fusion chart ──────────────────────────────────────────────────────────
+const fcCtx=document.getElementById('fusionChart').getContext('2d');
+try {
+  if (typeof Chart !== 'undefined') {
+    fusionChart=new Chart(fcCtx,{
+      type:'line',
+      data:{labels:Array(80).fill(''),datasets:[{data:Array(80).fill(0),borderColor:'#00e5ff',borderWidth:1.5,fill:true,
+        backgroundColor:(ctx)=>{const g=ctx.chart.ctx.createLinearGradient(0,0,0,90);g.addColorStop(0,'rgba(0,229,255,.18)');g.addColorStop(1,'rgba(0,229,255,0)');return g;},
+        tension:.4,pointRadius:0}]},
+      options:{responsive:true,maintainAspectRatio:false,animation:false,
+        scales:{x:{display:false},y:{min:0,max:100,display:true,ticks:{color:'#3d4f6e',font:{family:'IBM Plex Mono',size:7},maxTicksLimit:4},grid:{color:'#1a2235'},border:{display:false}}},
+        plugins:{legend:{display:false}}}
+    });
+  } else {
+    setFrontendStatus('Chart library unavailable. Running dashboard without fusion chart.', 'warn');
+  }
+} catch (chartErr) {
+  setFrontendStatus(`Chart init failed: ${String(chartErr).slice(0, 90)}`, 'warn');
+}
+
+// ── Simulate ──────────────────────────────────────────────────────────────
+function simulate(act){
+  fetch(`${API}/api/simulate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({activity:act})})
+    .catch(e=>console.error('simulate error',e));
+  document.querySelectorAll('.sbtn').forEach(b=>b.classList.remove('active'));
+  const el=document.getElementById('sb-'+act);
+  if(el) el.classList.add('active');
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────
+async function sendChat(){
+  const inp=document.getElementById('chat-input'),msg=inp.value.trim();
+  if(!msg)return; inp.value='';
+  const box=document.getElementById('chat-box');
+  box.innerHTML+=`<div class="cmsg"><div class="who">YOU</div><div class="text">${msg}</div></div>`;
+  box.scrollTop=box.scrollHeight;
+  try{
+    const r=await fetch(`${API}/api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,context:latestData})});
+    const d=await r.json();
+    box.innerHTML+=`<div class="cmsg ai"><div class="who">AI COACH</div><div class="text">${d.reply}</div></div>`;
+  }catch(e){
+    box.innerHTML+=`<div class="cmsg ai"><div class="who">AI COACH</div><div class="text">Connection error.</div></div>`;
+  }
+  box.scrollTop=box.scrollHeight;
+}
+
+// ── Timeline ──────────────────────────────────────────────────────────────
+async function loadTimeline(){
+  try{
+    const r=await fetch(`${API}/api/timeline`),d=await r.json();
+    const el=document.getElementById('timeline-list');
+    if(!d.timeline||!d.timeline.length)return;
+    const recent=d.timeline.slice(-8).reverse();
+    el.innerHTML=recent.map(ev=>{
+      const ago=Math.round(Date.now()/1000-ev.time), c=ACT_COLORS[ev.activity]||'#8496b4';
+      return `<div class="trow"><div class="sdot" style="background:${c}"></div><div style="flex:1;font-weight:600;color:${c}">${ev.activity.replace('_',' ')}</div><div style="color:var(--dim)">${Math.round(ev.confidence*100)}%</div><div style="font-size:8px;color:var(--dim);margin-left:4px">${ago}s</div></div>`;
+    }).join('');
+  }catch(e){}
+}
+setInterval(loadTimeline,2000);
+
+// ── ML feature importances ─────────────────────────────────────────────────
+async function loadMLInfo(){
+  try{
+    const r=await fetch(`${API}/api/ml/info`),d=await r.json();
+    if(d.trained&&d.importances){
+      const fi=Object.entries(d.importances).sort((a,b)=>b[1]-a[1]).slice(0,5);
+      document.getElementById('ml-fi').innerHTML=fi.map(([k,v])=>`
+        <div class="ml-prob-row">
+          <div class="ml-prob-label">${k}</div>
+          <div class="ml-prob-bar"><div class="ml-prob-fill" style="width:${Math.round(v*100*5)}%;background:var(--purple)"></div></div>
+          <div class="ml-prob-val">${(v*100).toFixed(1)}%</div>
+        </div>`).join('');
+      document.getElementById('ml-model-name').textContent=d.model||'ensemble';
+      document.getElementById('ml-acc-lbl').textContent=d.accuracy?`acc ${d.accuracy.toFixed(3)}`:'heuristic';
+    }
+  }catch(e){}
+}
+setTimeout(loadMLInfo,3000);
+
+// ── FPS counter ────────────────────────────────────────────────────────────
+setInterval(()=>{
+  const now=Date.now(),fps=Math.round(fpsCounter*1000/(now-lastFpsT));
+  document.getElementById('s-hz').textContent=fps; fpsCounter=0; lastFpsT=now;
+},1000);
+
+setInterval(loadBaselineStatus, 5000);
+
+// ── Phone URL ──────────────────────────────────────────────────────────────
+document.getElementById('phone-url').textContent=`${API}/phone`;
+if (['localhost', '127.0.0.1'].includes(new URL(API).hostname)) {
+  document.getElementById('phone-url-note').textContent='If your phone cannot open this, replace localhost with your PC LAN IP (example: 192.168.x.x).';
+} else {
+  document.getElementById('phone-url-note').textContent='Phone and dashboard must be on the same WiFi network.';
+}
+
+connectWS(); loadTimeline();
+loadRoomTarget();
+loadStrictMode();
+loadBaselineStatus();
+</script>
+</body>
+</html>
